@@ -4,7 +4,7 @@ const authorizeAdmin = require("../middleware/authorizeAdmin");
 
 const authRoutes = Router();
 
-authRoutes.post("/create-user", authorizeAdmin, CreateUser);
+authRoutes.post("/createUser", authorizeAdmin, CreateUser);
 authRoutes.post("/login", Login);
 
 module.exports = authRoutes;
