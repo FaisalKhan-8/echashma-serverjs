@@ -29,3 +29,18 @@ model User {
   updated_at DateTime @default(now())
   uuid       String   @unique @default(uuid())
 }
+
+model Companies {
+  id            Int      @id @default(autoincrement())
+  companyName   String   @unique
+  address       String
+  contactPerson String
+  phone         Int
+  email         String   @unique
+  gst           String?  @unique
+  pancard       String
+  aadhaarcard   String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  uuid          String   @unique @default(uuid())
+}
