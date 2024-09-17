@@ -28,6 +28,9 @@ model User {
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
   uuid       String   @unique @default(uuid())
+
+  companyId Int? // Foreign key reference to Companies (optional if a user doesn't need to belong to a company)
+  company   Companies? @relation(fields: [companyId], references: [id]) // Defining the relationship
 }
 
 model Companies {
@@ -35,7 +38,7 @@ model Companies {
   companyName   String   @unique
   address       String
   contactPerson String
-  phone         Int
+  phone         String
   email         String   @unique
   gst           String?  @unique
   pancard       String
@@ -43,4 +46,6 @@ model Companies {
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now())
   uuid          String   @unique @default(uuid())
+
+  users User[] @relation // One-to-many relationship with users
 }

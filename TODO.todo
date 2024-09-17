@@ -2,3 +2,15 @@
  TODO: add dist from inside dist
  indide the package.json pkg field change src/dist accets to dist/dist
 }
+
+
+TODO: this is howyou can create a new user
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "name": "John Doe",
+  "avatar": "https://example.com/avatar.jpg",
+  "role": "ADMIN", // Optional, defaults to "SUBADMIN"
+  "companyId": 1  // Optional, if companyId is provided
+}
+

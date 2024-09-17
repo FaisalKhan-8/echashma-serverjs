@@ -12,7 +12,7 @@ const CreateUser = async (req, res, next) => {
     // Validate request body using Zod schema
     CreateUserSchema.parse(req.body);
 
-    const { email, password, name, avatar, role } = req.body;
+    const { email, password, name, avatar, role, companyId } = req.body;
 
     // Check if the user already exists
     const existingUser = await db.user.findUnique({
@@ -26,7 +26,19 @@ const CreateUser = async (req, res, next) => {
     // Hash the password
     const hashedPassword = hashSync(password, 10);
 
-    // Create the new user
+    // Check if the provided company exists (optional step if companyId is present)
+    let company = null;
+    if (companyId) {
+      company = await db.companies.findUnique({
+        where: { id: companyId },
+      });
+
+      if (!company) {
+        throw new AppError("Company not found!", 404);
+      }
+    }
+
+    // Create the new user with optional company assignment
     const newUser = await db.user.create({
       data: {
         email,
@@ -34,6 +46,10 @@ const CreateUser = async (req, res, next) => {
         name,
         avatar,
         role: role || "SUBADMIN", // Default to 'SUBADMIN' if no role is provided
+        companyId: companyId || null, // Optional company assignment
+      },
+      include: {
+        company: true, // Include company details in the response
       },
     });
 
@@ -65,6 +81,9 @@ const Login = async (req, res, next) => {
     // Check if the user exists and the password is correct
     let user = await db.user.findFirst({
       where: { email },
+      include: {
+        company: true, // Include company details in the response
+      },
     });
 
     if (!user) {
@@ -80,6 +99,7 @@ const Login = async (req, res, next) => {
       {
         userId: user.id,
       },
+
       process.env.JWT_SECRET
     );
 

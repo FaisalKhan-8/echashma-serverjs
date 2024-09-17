@@ -1,11 +1,15 @@
 const { z } = require("zod");
 
 const CreateUserSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(1),
-  avatar: z.string().optional(),
-  role: z.enum(["ADMIN", "SUBADMIN"]).optional(),
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(8, "Password must be at least 8 characters long"),
+  name: z.string().min(1, "Name is required"),
+  avatar: z.string().optional(), // Avatar can be a URL or a path; it's optional
+  role: z.enum(["ADMIN", "SUBADMIN"]).optional(), // Defaults to SUBADMIN if not provided
+  companyId: z
+    .string()
+    .optional()
+    .transform((val) => parseInt(val, 10)), // Coerce string to number if provided
 });
 
 const LoginUserSchema = z.object({

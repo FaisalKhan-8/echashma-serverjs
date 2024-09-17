@@ -1,14 +1,16 @@
 const { z } = require("zod");
 
-const CreateCompaniesSchema = z.object({
-  campanyName: z.string().min(1, "Please enter a company name."),
-  email: z.string().email(),
-  address: z.string().min(1, "Please enter a address."),
-  contactPerson: z.string().min(1, "Please enter a contact."),
-  phone: z.number("Please enter a phone number."),
-  gst: z.string().min(1, "Please enter a gst."),
-  pancard: z.string().min(1, "please upload your pancard."),
-  aadhaarcard: z.string().min(1, "please upload your Aadhaarcard."),
+const CreateCompanySchema = z.object({
+  companyName: z.string().min(1, "Company name is required"),
+  address: z.string().min(1, "Address is required"),
+  contactPerson: z.string().min(1, "Contact person is required"),
+  phone: z.string().min(1, "Phone number is required"),
+  email: z.string().email("Invalid email format"),
+  gst: z.string().optional(),
+  userId: z
+    .string()
+    .optional()
+    .transform((val) => parseInt(val, 10)), // Coerce string to number if provided
 });
 
-module.exports = { CreateCompaniesSchema };
+module.exports = { CreateCompanySchema };
