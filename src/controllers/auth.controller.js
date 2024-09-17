@@ -45,7 +45,7 @@ const CreateUser = async (req, res, next) => {
         password: hashedPassword,
         name,
         avatar,
-        role: role || "SUBADMIN", // Default to 'SUBADMIN' if no role is provided
+        role: role || "SUBADMIN",
         companyId: companyId || null, // Optional company assignment
       },
       include: {
