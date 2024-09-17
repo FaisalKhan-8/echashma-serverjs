@@ -13,4 +13,21 @@ const CreateCompanySchema = z.object({
     .transform((val) => parseInt(val, 10)), // Coerce string to number if provided
 });
 
-module.exports = { CreateCompanySchema };
+const UpdateCompanySchema = z.object({
+  companyId: z
+    .string()
+    .optional()
+    .transform((val) => parseInt(val, 10)),
+  companyName: z.string().optional(),
+  address: z.string().optional(),
+  contactPerson: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  gst: z.string().optional(),
+  userId: z
+    .string()
+    .optional()
+    .transform((val) => parseInt(val, 10)),
+});
+
+module.exports = { CreateCompanySchema, UpdateCompanySchema };

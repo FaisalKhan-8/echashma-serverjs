@@ -16,16 +16,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// API routes
+app.use("/api", rootRouter);
+
 // Resolve path for static files
 const distPath = path.join(process.cwd(), "/src/dist");
 app.use(express.static(distPath));
-
 app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
-
-// API routes
-app.use("/api", rootRouter);
 
 // Error handling middleware
 app.use(errorHandler);

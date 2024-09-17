@@ -17,4 +17,14 @@ const LoginUserSchema = z.object({
   password: z.string().min(8),
 });
 
-module.exports = { CreateUserSchema, LoginUserSchema };
+const UpdateUserSchema = z.object({
+  userId: z.number().int(),
+  email: z.string().email().optional(),
+  password: z.string().min(6).optional(),
+  name: z.string().min(1).optional(),
+  avatar: z.string().url().optional(),
+  role: z.enum(["ADMIN", "SUBADMIN"]).optional(),
+  companyId: z.number().int().optional(),
+});
+
+module.exports = { CreateUserSchema, LoginUserSchema, UpdateUserSchema };

@@ -1,7 +1,11 @@
 const db = require("../utils/db.config.js");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { CreateUserSchema, LoginUserSchema } = require("../schema/user.js");
+const {
+  CreateUserSchema,
+  LoginUserSchema,
+  UpdateUserSchema,
+} = require("../schema/user.js");
 const { AppError } = require("../errors/AppError.js");
 const { z } = require("zod");
 
@@ -117,7 +121,111 @@ const Login = async (req, res, next) => {
   }
 };
 
+const GetAllUser = async (req, res, next) => {
+  try {
+    const users = await db.user.findMany({
+      include: {
+        company: true,
+      },
+    });
+
+    console.log("Users fetched from database:", users);
+
+    res.json({
+      status: "success",
+      users,
+    });
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    next(new AppError("Failed to fetch users", 500));
+  }
+};
+
+const UpdateUser = async (req, res, next) => {
+  try {
+    // Validate request body using Zod schema
+    UpdateUserSchema.parse(req.body);
+
+    const { userId, email, password, name, avatar, role, companyId } = req.body;
+
+    // Find the user to be updated
+    const existingUser = await db.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      throw new AppError("User not found!", 404);
+    }
+
+    // Check if the email is already taken by another user
+    if (email && email !== existingUser.email) {
+      const emailExists = await db.user.findUnique({
+        where: { email },
+      });
+
+      if (emailExists) {
+        throw new AppError("Email already in use by another user!", 400);
+      }
+    }
+
+    // Hash the new password if provided
+    let hashedPassword = existingUser.password;
+    if (password) {
+      hashedPassword = hashSync(password, 10);
+    }
+
+    // Check if the provided company exists (optional step if companyId is present)
+    let company = null;
+    if (companyId) {
+      company = await db.companies.findUnique({
+        where: { id: companyId },
+      });
+
+      if (!company) {
+        throw new AppError("Company not found!", 404);
+      }
+    }
+
+    // Update the user with the new data
+    const updatedUser = await db.user.update({
+      where: { id: userId },
+      data: {
+        email: email || existingUser.email,
+        password: hashedPassword,
+        name: name || existingUser.name,
+        avatar: avatar || existingUser.avatar,
+        role: role || existingUser.role,
+        companyId: companyId || existingUser.companyId, // Optional company assignment
+      },
+      include: {
+        company: true, // Include company details in the response
+      },
+    });
+
+    // Respond with success message and updated user data
+    res.status(200).json({
+      message: "User updated successfully!",
+      user: updatedUser,
+    });
+  } catch (error) {
+    // Handle Zod validation errors
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        status: "error",
+        message: "Validation failed",
+        errors: error.errors,
+      });
+    }
+
+    next(error);
+  }
+};
+
+// TODO: Delete user api
+
 module.exports = {
   CreateUser,
   Login,
+  GetAllUser,
+  UpdateUser,
 };
