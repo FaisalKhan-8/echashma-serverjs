@@ -117,7 +117,6 @@ const Login = async (req, res, next) => {
   }
 };
 
-// Export the functions as CommonJS modules
 module.exports = {
   CreateUser,
   Login,
