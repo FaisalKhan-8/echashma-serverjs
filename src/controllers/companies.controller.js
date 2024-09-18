@@ -77,6 +77,18 @@ const createCompany = async (req, res, next) => {
       },
     });
 
+    if (gst) {
+      const gst = await db.companies.findUnique({
+        where: { gst: gst },
+      });
+      if (!gst) {
+        throw new AppError(
+          "GST number already in use by another company!",
+          400
+        );
+      }
+    }
+
     // Optionally assign the company to a user if userId is provided
     if (userId) {
       const user = await db.user.findUnique({ where: { id: userId } });
