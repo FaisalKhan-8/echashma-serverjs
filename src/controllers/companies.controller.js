@@ -129,18 +129,47 @@ const createCompany = async (req, res, next) => {
 };
 
 // get All Company
-const getAllCompanies = async (req, res, next) => {
-  try {
-    const companies = await db.companies.findMany({
-      include: {
-        users: true,
+async function getAllCompanies(req, res) {
+  const { page = 1, pageSize = 10, searchTerm = "" } = req.query;
+  const pageSizeNumber = parseInt(pageSize, 10) || 10;
+  const pageNumber = parseInt(page, 10) || 1;
+
+  // Get the total count of companies matching the search term
+  const companiesCount = await db.companies.findMany({
+    where: {
+      companyName: {
+        contains: searchTerm,
+        // Remove mode: "insensitive"
       },
-    });
-    res.status(200).json({ status: "success", companies });
-  } catch (error) {
-    next(error);
-  }
-};
+    },
+    select: {
+      id: true, // Just an example; select any field you need
+    },
+  });
+
+  const totalRecords = companiesCount.length;
+
+  // Now, retrieve the companies with pagination
+  const companies = await db.companies.findMany({
+    where: {
+      companyName: {
+        contains: searchTerm,
+      },
+    },
+    skip: (pageNumber - 1) * pageSizeNumber,
+    take: pageSizeNumber,
+  });
+
+  res.json({
+    companies,
+    pagination: {
+      page: pageNumber,
+      pageSize: pageSizeNumber,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / pageSizeNumber),
+    },
+  });
+}
 
 // update company
 const updateCompany = async (req, res, next) => {
