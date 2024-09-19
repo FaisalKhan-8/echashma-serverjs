@@ -29,8 +29,7 @@ model User {
   updated_at DateTime @default(now())
   uuid       String   @unique @default(uuid())
 
-  companyId Int? // Foreign key reference to Companies (optional if a user doesn't need to belong to a company)
-  company   Companies? @relation(fields: [companyId], references: [id]) // Defining the relationship
+  companies Companies[] @relation("UserCompanies")
 }
 
 model Companies {
@@ -47,5 +46,5 @@ model Companies {
   updated_at    DateTime @default(now())
   uuid          String   @unique @default(uuid())
 
-  users User[] @relation // One-to-many relationship with users
+  users User[] @relation("UserCompanies")
 }

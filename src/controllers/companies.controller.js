@@ -42,11 +42,18 @@ const upload = multer({
 // Create Company Controller
 const createCompany = async (req, res, next) => {
   try {
-    // Parse form data (excluding files) with Zod validation
+    // Validate request body
     const parsedBody = CreateCompanySchema.parse(req.body);
 
-    const { companyName, address, contactPerson, phone, email, gst, userId } =
-      parsedBody;
+    const {
+      companyName,
+      address,
+      contactPerson,
+      phone,
+      email,
+      gst,
+      userId = [],
+    } = parsedBody;
 
     // Check if the company already exists
     const existingCompany = await db.companies.findUnique({
@@ -63,25 +70,12 @@ const createCompany = async (req, res, next) => {
       ? req.files.aadhaarcard[0].path
       : null;
 
-    // Create the new company in the database
-    const newCompany = await db.companies.create({
-      data: {
-        companyName,
-        address,
-        contactPerson,
-        phone, // Ensure phone is an integer
-        email,
-        gst,
-        pancard: pancardImage, // Store PAN card image path
-        aadhaarcard: aadhaarcardImage, // Store Aadhaar card image path
-      },
-    });
-
+    // Check if the GST number is already in use
     if (gst) {
-      const gst = await db.companies.findUnique({
-        where: { gst: gst },
+      const existingGst = await db.companies.findUnique({
+        where: { gst },
       });
-      if (!gst) {
+      if (existingGst) {
         throw new AppError(
           "GST number already in use by another company!",
           400
@@ -89,16 +83,32 @@ const createCompany = async (req, res, next) => {
       }
     }
 
-    // Optionally assign the company to a user if userId is provided
-    if (userId) {
-      const user = await db.user.findUnique({ where: { id: userId } });
-      if (!user) throw new AppError("User not found!", 404);
-
-      await db.user.update({
-        where: { id: userId },
-        data: { companyId: newCompany.id },
+    // Check if the email is already in use
+    if (email) {
+      const existingEmail = await db.companies.findUnique({
+        where: { email },
       });
+      if (existingEmail) {
+        throw new AppError("Email already in use by another company!", 400);
+      }
     }
+
+    // Create the new company in the database
+    const newCompany = await db.companies.create({
+      data: {
+        companyName,
+        address,
+        contactPerson,
+        phone,
+        email,
+        gst,
+        pancard: pancardImage,
+        aadhaarcard: aadhaarcardImage,
+        users: {
+          connect: userId.map((id) => ({ id })),
+        },
+      },
+    });
 
     // Return a successful response
     res.status(201).json({
@@ -135,7 +145,8 @@ const getAllCompanies = async (req, res, next) => {
 // update company
 const updateCompany = async (req, res, next) => {
   try {
-    UpdateCompanySchema.parse(req.body);
+    // Validate request body
+    const parsedBody = UpdateCompanySchema.parse(req.body);
 
     const {
       companyId,
@@ -146,18 +157,13 @@ const updateCompany = async (req, res, next) => {
       email,
       gst,
       userId,
-    } = req.body;
+    } = parsedBody;
 
-    // Convert companyId and userId to integers
+    // Convert companyId to integer
     const companyIdNumber = parseInt(companyId, 10);
-    const userIdNumber = parseInt(userId, 10);
 
     if (isNaN(companyIdNumber)) {
       throw new AppError("Invalid company ID provided!", 400);
-    }
-
-    if (userId && isNaN(userIdNumber)) {
-      throw new AppError("Invalid user ID provided!", 400);
     }
 
     // Find the company to be updated
@@ -203,26 +209,18 @@ const updateCompany = async (req, res, next) => {
         gst: gst || existingCompany.gst,
         pancard: pancardImage, // Store PAN card image path if updated
         aadhaarcard: aadhaarcardImage, // Store Aadhaar card image path if updated
+        users:
+          userId && userId.length > 0
+            ? { connect: userId.map((id) => ({ id })) } // Connect multiple users to the company
+            : undefined,
       },
     });
 
-    // Optionally reassign the company to a user if userId is provided
-    if (userIdNumber) {
-      const user = await db.user.findUnique({ where: { id: userIdNumber } });
-      if (!user) throw new AppError("User not found!", 404);
-
-      await db.user.update({
-        where: { id: userIdNumber },
-        data: { companyId: updatedCompany.id },
-      });
-    }
-
     // Respond with success message and updated company data
-    else
-      res.status(200).json({
-        message: "Company updated successfully!",
-        company: updatedCompany,
-      });
+    res.status(200).json({
+      message: "Company updated successfully!",
+      company: updatedCompany,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({

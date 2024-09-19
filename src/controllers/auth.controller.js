@@ -125,11 +125,9 @@ const GetAllUser = async (req, res, next) => {
   try {
     const users = await db.user.findMany({
       include: {
-        company: true,
+        companies: true,
       },
     });
-
-    console.log("Users fetched from database:", users);
 
     res.json({
       status: "success",
