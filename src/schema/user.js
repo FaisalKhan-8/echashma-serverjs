@@ -7,9 +7,8 @@ const CreateUserSchema = z.object({
   avatar: z.string().optional(), // Avatar can be a URL or a path; it's optional
   role: z.enum(["ADMIN", "SUBADMIN"]).optional(), // Defaults to SUBADMIN if not provided
   companyId: z
-    .string()
-    .optional()
-    .transform((val) => parseInt(val, 10)), // Coerce string to number if provided
+    .array(z.string().transform((val) => parseInt(val, 10)))
+    .optional(), // Array of user IDs
 });
 
 const LoginUserSchema = z.object({

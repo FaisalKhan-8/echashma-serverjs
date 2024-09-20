@@ -16,7 +16,7 @@ const CreateUser = async (req, res, next) => {
     // Validate request body using Zod schema
     CreateUserSchema.parse(req.body);
 
-    const { email, password, name, avatar, role, companyId } = req.body;
+    const { email, password, name, avatar, role, companyId = [] } = req.body;
 
     // Check if the user already exists
     const existingUser = await db.user.findUnique({
@@ -30,18 +30,6 @@ const CreateUser = async (req, res, next) => {
     // Hash the password
     const hashedPassword = hashSync(password, 10);
 
-    // Check if the provided company exists (optional step if companyId is present)
-    let company = null;
-    if (companyId) {
-      company = await db.companies.findUnique({
-        where: { id: companyId },
-      });
-
-      if (!company) {
-        throw new AppError("Company not found!", 404);
-      }
-    }
-
     // Create the new user with optional company assignment
     const newUser = await db.user.create({
       data: {
@@ -50,10 +38,12 @@ const CreateUser = async (req, res, next) => {
         name,
         avatar,
         role: role || "SUBADMIN",
-        companyId: companyId || null, // Optional company assignment
+        companies: {
+          connect: companyId.map((id) => ({ id: parseInt(id, 10) })), // Wrap ID in an object
+        },
       },
       include: {
-        company: true, // Include company details in the response
+        companies: true, // Include company details in the response
       },
     });
 
@@ -122,11 +112,30 @@ const Login = async (req, res, next) => {
 };
 
 const GetAllUser = async (req, res, next) => {
+  const { search = "", page = 1, limit = 10 } = req.query;
+  const skip = (page - 1) * limit;
+
   try {
     const users = await db.user.findMany({
+      where: {
+        OR: [
+          {
+            name: {
+              contains: search.toLowerCase(),
+            },
+          },
+          {
+            email: {
+              contains: search.toLowerCase(),
+            },
+          },
+        ],
+      },
       include: {
         companies: true,
       },
+      skip,
+      take: parseInt(limit),
     });
 
     res.json({
