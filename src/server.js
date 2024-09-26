@@ -21,6 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", rootRouter);
 
 // Resolve path for static files
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const distPath = path.join(process.cwd(), "/src/dist");
 app.use(express.static(distPath));
 app.get("*", (req, res) => {

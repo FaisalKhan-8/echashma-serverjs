@@ -46,5 +46,21 @@ model Companies {
   updated_at    DateTime @default(now())
   uuid          String   @unique @default(uuid())
 
-  users User[] @relation("UserCompanies")
+  users    User[]   @relation("UserCompanies")
+  branches Branch[] @relation("CompanyBranches") // Relationship to Branch model
+}
+
+model Branch {
+  id            Int      @id @default(autoincrement())
+  branchName    String
+  address       String
+  phone         String
+  email         String?  @unique
+  contactPerson String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  uuid          String   @unique @default(uuid())
+
+  company   Companies @relation("CompanyBranches", fields: [companyId], references: [id])
+  companyId Int // Foreign key to Companies
 }
