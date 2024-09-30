@@ -30,6 +30,7 @@ model User {
   uuid       String   @unique @default(uuid())
 
   companies Companies[] @relation("UserCompanies")
+  branches  Branch[]    @relation("UserBranches")
 }
 
 model Companies {
@@ -63,4 +64,46 @@ model Branch {
 
   company   Companies @relation("CompanyBranches", fields: [companyId], references: [id])
   companyId Int // Foreign key to Companies
+  users     User[]    @relation("UserBranches") // Many-to-many relation with User
+  products  Product[] @relation("BranchProducts") // Many-to-many relation with Product
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  code        Int // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
+  name        String // Name of the product
+  frameType   FrameType // Enum for frame type (RimLess, Metallic, etc.)
+  shapeType   ShapeType // Enum for shape type (Round, Square, etc.)
+  visionType  VisionType // Enum for vision type (Single Vision, Bi Focal, etc.)
+  coatingType CoatingType // Enum for coating type (AntiGlare, Blue Block, etc.)
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @default(now())
+  branches    Branch[]    @relation("BranchProducts") // Many-to-many relation with Branch
+}
+
+enum FrameType {
+  RIMLESS
+  METALLIC
+  SHEET
+}
+
+enum ShapeType {
+  ROUND
+  SQUARE
+  HEXAGONE
+}
+
+enum VisionType {
+  SINGLE_VISION
+  BI_FOCAL
+  PROGRESSIVE
+}
+
+enum CoatingType {
+  WITHOUT_ANTI_GLARE
+  WITH_ANTI_GLARE
+  BLUE_BLOCK
+  PHOTOCHROMATIC
+  PHOTOCHROMATIC_WITH_ANTI_GLARE
+  PHOTOCHROMATIC_WITH_BLUE_BLOCK
 }

@@ -76,7 +76,7 @@ const Login = async (req, res, next) => {
     let user = await db.user.findFirst({
       where: { email },
       include: {
-        company: true, // Include company details in the response
+        companies: true, // Include company details in the response
       },
     });
 
@@ -92,6 +92,7 @@ const Login = async (req, res, next) => {
     const token = jwt.sign(
       {
         userId: user.id,
+        role: user.role,
       },
 
       process.env.JWT_SECRET
