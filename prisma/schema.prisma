@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -69,41 +63,59 @@ model Branch {
 }
 
 model Product {
-  id          Int         @id @default(autoincrement())
-  code        Int // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
-  name        String // Name of the product
-  frameType   FrameType // Enum for frame type (RimLess, Metallic, etc.)
-  shapeType   ShapeType // Enum for shape type (Round, Square, etc.)
-  visionType  VisionType // Enum for vision type (Single Vision, Bi Focal, etc.)
-  coatingType CoatingType // Enum for coating type (AntiGlare, Blue Block, etc.)
-  created_at  DateTime    @default(now())
-  updated_at  DateTime    @default(now())
-  branches    Branch[]    @relation("BranchProducts") // Many-to-many relation with Branch
+  id            Int         @id @default(autoincrement())
+  code          Int // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
+  name          String // Name of the product
+  frameTypeId   Int // Foreign key to FrameType
+  frameType     FrameType   @relation(fields: [frameTypeId], references: [id])
+  shapeTypeId   Int // Foreign key to ShapeType
+  shapeType     ShapeType   @relation(fields: [shapeTypeId], references: [id])
+  visionTypeId  Int // Foreign key to VisionType
+  visionType    VisionType  @relation(fields: [visionTypeId], references: [id])
+  coatingTypeId Int // Foreign key to CoatingType
+  coatingType   CoatingType @relation(fields: [coatingTypeId], references: [id])
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @default(now())
+  branches      Branch[]    @relation("BranchProducts") // Many-to-many relation with Branch
+  suppliers     Supplier[]  @relation("ProductSuppliers") // Many-to-many relation with Supplier
 }
 
-enum FrameType {
-  RIMLESS
-  METALLIC
-  SHEET
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String // Supplier name
+  address       String // Supplier address
+  contactPerson String // Contact person for the supplier
+  contactNo     String // Contact number for the supplier
+  email         String   @unique // Supplier's email
+  gstin         String?  @unique // Optional GSTIN number
+  uin           String? // Optional UIN number
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  uuid          String   @unique @default(uuid())
+
+  products Product[] @relation("ProductSuppliers") // Many-to-many relation with Product
 }
 
-enum ShapeType {
-  ROUND
-  SQUARE
-  HEXAGONE
+model FrameType {
+  id       Int       @id @default(autoincrement())
+  name     String // Rimless, Metallic, Sheet, etc.
+  products Product[] // Relation to products
 }
 
-enum VisionType {
-  SINGLE_VISION
-  BI_FOCAL
-  PROGRESSIVE
+model ShapeType {
+  id       Int       @id @default(autoincrement())
+  name     String // Round, Square, Hexagon, etc.
+  products Product[] // Relation to products
 }
 
-enum CoatingType {
-  WITHOUT_ANTI_GLARE
-  WITH_ANTI_GLARE
-  BLUE_BLOCK
-  PHOTOCHROMATIC
-  PHOTOCHROMATIC_WITH_ANTI_GLARE
-  PHOTOCHROMATIC_WITH_BLUE_BLOCK
+model VisionType {
+  id       Int       @id @default(autoincrement())
+  name     String // Single Vision, Bi-Focal, Progressive, etc.
+  products Product[] // Relation to products
+}
+
+model CoatingType {
+  id       Int       @id @default(autoincrement())
+  name     String // Without Anti-Glare, Blue Block, etc.
+  products Product[] // Relation to products
 }

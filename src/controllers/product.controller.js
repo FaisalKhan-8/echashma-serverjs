@@ -1,156 +1,162 @@
 const db = require("../utils/db.config");
-const { CreateProductSchema } = require("../schema/product"); // Adjust the import based on your file structure
 
-const addProduct = async (req, res) => {
+// Create a new product
+const createProduct = async (req, res) => {
+  const {
+    code,
+    name,
+    frameTypeId,
+    shapeTypeId,
+    visionTypeId,
+    coatingTypeId,
+    supplierIds, // Array of supplier IDs to associate with the product
+  } = req.body;
+
   try {
-    // Validate the request body against the schema
-    const validatedData = CreateProductSchema.parse(req.body); // Validate and destructure
-
-    // Destructure required fields from validated data
-    const {
-      code,
-      name,
-      frameType,
-      shapeType,
-      visionType,
-      coatingType,
-      branchIds, // array of branch IDs where this product is available
-    } = validatedData;
-
-    // Validation checks for required fields
-    if (!branchIds || branchIds.length === 0) {
-      return res.status(400).json({
-        error: "At least one branch must be selected.",
-      });
-    }
-
-    // Validate that all branch IDs exist in the database
-    const validBranches = await db.branch.findMany({
-      where: {
-        id: { in: branchIds },
-      },
-    });
-
-    // If the number of valid branches is less than the number of provided branchIds, return an error
-    if (validBranches.length !== branchIds.length) {
-      return res.status(404).json({
-        error: "Some branches could not be found. Please check the branch IDs.",
-      });
-    }
-
-    // Create a new product with relation to branches
     const newProduct = await db.product.create({
       data: {
         code,
         name,
-        frameType,
-        shapeType,
-        visionType,
-        coatingType,
-        branches: {
-          connect: branchIds.map((branchId) => ({ id: branchId })),
+        frameTypeId,
+        shapeTypeId,
+        visionTypeId,
+        coatingTypeId,
+        suppliers: {
+          connect: supplierIds.map((id) => ({ id })), // Connect existing suppliers
         },
       },
       include: {
-        branches: true, // Include related branches in the response
+        frameType: true,
+        shapeType: true,
+        visionType: true,
+        coatingType: true,
+        suppliers: true, // Include suppliers in the response
       },
     });
-
-    // Return the newly created product with related branches
-    return res.status(201).json(newProduct);
+    res.status(201).json(newProduct);
   } catch (error) {
-    // Handle validation errors from Zod
-    if (error instanceof ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    console.error("Error adding product:", error);
-    return res
-      .status(500)
-      .json({ error: "Something went wrong while adding the product." });
+    console.error(error);
+    res.status(500).json({ error: "Unable to create product" });
   }
 };
 
-const getAllProductsByType = async (req, res) => {
-  const { type, search, page = 1, limit = 10 } = req.query;
-
-  // Validate the type parameter
-  if (!type) {
-    return res.status(400).json({
-      error: "Type parameter is required.",
-    });
-  }
-
-  // Create a valid query based on the provided type
-  let query = {};
-  switch (type) {
-    case "frameType":
-      query.frameType = { not: undefined }; // Select all products with any frameType
-      break;
-    case "shapeType":
-      query.shapeType = { not: undefined }; // Select all products with any shapeType
-      break;
-    case "visionType":
-      query.visionType = { not: undefined }; // Select all products with any visionType
-      break;
-    case "coatingType":
-      query.coatingType = { not: undefined }; // Select all products with any coatingType
-      break;
-    default:
-      return res.status(400).json({
-        error: "Invalid product type specified.",
-      });
-  }
-
-  // If a search term is provided, add it to the query
-  if (search) {
-    query.name = { contains: search, mode: "insensitive" }; // Case insensitive search
-  }
+// Get all products with pagination and search
+const getAllProducts = async (req, res) => {
+  const { page = 1, limit = 10, search = "" } = req.query; // Get query parameters
+  const pageNumber = parseInt(page);
+  const pageLimit = parseInt(limit);
 
   try {
-    // Fetch total count of products matching the query (for pagination)
-    const totalCount = await db.product.count({
-      where: query,
-    });
-
-    // Calculate total pages
-    const totalPages = Math.ceil(totalCount / limit);
-
-    // Fetch paginated products matching the query
     const products = await db.product.findMany({
-      where: query,
-      include: {
-        branches: true, // Include related branches if needed
+      where: {
+        // Search condition
+        name: {
+          contains: search, // Search for products by name
+          mode: "insensitive", // Case-insensitive search
+        },
       },
-      skip: (page - 1) * limit, // Skip the records for pagination
-      take: parseInt(limit, 10), // Limit the number of records returned
+      skip: (pageNumber - 1) * pageLimit, // Skip to the right page
+      take: pageLimit, // Limit the number of results
+      include: {
+        frameType: true,
+        shapeType: true,
+        visionType: true,
+        coatingType: true,
+        suppliers: true, // Include suppliers in the response
+      },
     });
 
-    // If no products are found, return a 404 response
-    if (products.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No products found for the specified type." });
-    }
-
-    // Return the found products and pagination info
-    return res.status(200).json({
-      products,
-      pagination: {
-        totalCount,
-        totalPages,
-        currentPage: parseInt(page, 10),
-        pageSize: parseInt(limit, 10),
+    // Count total products for pagination
+    const totalProducts = await db.product.count({
+      where: {
+        name: {
+          contains: search,
+          mode: "insensitive",
+        },
       },
+    });
+
+    res.status(200).json({
+      totalProducts, // Total number of products matching search criteria
+      totalPages: Math.ceil(totalProducts / pageLimit), // Total pages
+      currentPage: pageNumber, // Current page
+      products, // Current page products
     });
   } catch (error) {
-    console.error("Error fetching products:", error);
-    return res
-      .status(500)
-      .json({ error: "Something went wrong while fetching products." });
+    console.error(error);
+    res.status(500).json({ error: "Unable to retrieve products" });
   }
 };
 
+// Get a single product by ID
+const getProductById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const product = await db.product.findUnique({
+      where: { id: Number(id) },
+      include: {
+        frameType: true,
+        shapeType: true,
+        visionType: true,
+        coatingType: true,
+      },
+    });
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+    res.status(200).json(product);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Unable to retrieve product" });
+  }
+};
+
+// Update a product by ID
+const updateProduct = async (req, res) => {
+  const { id } = req.params;
+  const { code, name, frameTypeId, shapeTypeId, visionTypeId, coatingTypeId } =
+    req.body;
+
+  try {
+    const updatedProduct = await db.product.update({
+      where: { id: Number(id) },
+      data: {
+        code,
+        name,
+        frameTypeId,
+        shapeTypeId,
+        visionTypeId,
+        coatingTypeId,
+      },
+    });
+    res.status(200).json(updatedProduct);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Unable to update product" });
+  }
+};
+
+// Delete a product by ID
+const deleteProduct = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await db.product.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Unable to delete product" });
+  }
+};
+
+// Export functions
 module.exports = {
-  addProduct,
-  getAllProductsByType,
+  createProduct,
+  getAllProducts,
+  getProductById,
+  updateProduct,
+  deleteProduct,
 };
