@@ -2,11 +2,11 @@ const db = require("../utils/db.config");
 
 // Create a new shape type
 const createShapeType = async (req, res) => {
-  const { name } = req.body;
+  const { code, name } = req.body;
 
   try {
     const newShapeType = await db.shapeType.create({
-      data: { name },
+      data: { code, name },
     });
     res.status(201).json(newShapeType);
   } catch (error) {
@@ -15,11 +15,48 @@ const createShapeType = async (req, res) => {
   }
 };
 
-// Get all shape types
+// Get all shape types with pagination and search
 const getAllShapeTypes = async (req, res) => {
+  const { page = 1, limit = 10, search = "" } = req.query;
+
+  const skip = (page - 1) * limit;
+  const take = parseInt(limit);
+
   try {
-    const shapeTypes = await db.shapeType.findMany();
-    res.status(200).json(shapeTypes);
+    const shapeTypes = await db.shapeType.findMany({
+      where: {
+        OR: [
+          {
+            code: {
+              contains: search,
+              // Prisma does not support `mode` for case insensitivity directly
+            },
+          },
+          {
+            name: {
+              contains: search,
+              // Prisma does not support `mode` for case insensitivity directly
+            },
+          },
+        ],
+      },
+      skip: skip,
+      take: take,
+    });
+
+    // Get the total count of shape types for pagination
+    const totalCount = await db.shapeType.count({
+      where: {
+        OR: [{ code: { contains: search } }, { name: { contains: search } }],
+      },
+    });
+
+    res.status(200).json({
+      shapeTypes,
+      totalCount,
+      totalPages: Math.ceil(totalCount / take),
+      currentPage: parseInt(page),
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Unable to retrieve shape types" });
@@ -49,12 +86,12 @@ const getShapeTypeById = async (req, res) => {
 // Update a shape type
 const updateShapeType = async (req, res) => {
   const { id } = req.params;
-  const { name } = req.body;
+  const { code, name } = req.body;
 
   try {
     const updatedShapeType = await db.shapeType.update({
       where: { id: parseInt(id) },
-      data: { name },
+      data: { code, name },
     });
     res.status(200).json(updatedShapeType);
   } catch (error) {

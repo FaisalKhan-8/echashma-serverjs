@@ -2,12 +2,13 @@ const db = require("../utils/db.config");
 
 // Create a new supplier
 const createSupplier = async (req, res) => {
-  const { name, address, contactPerson, contactNo, email, gstin, uin } =
+  const { code, name, address, contactPerson, contactNo, email, gstin, uin } =
     req.body;
 
   try {
     const newSupplier = await db.supplier.create({
       data: {
+        code,
         name,
         address,
         contactPerson,
@@ -34,8 +35,7 @@ const getAllSuppliers = async (req, res) => {
     const suppliers = await db.supplier.findMany({
       where: {
         name: {
-          contains: search,
-          mode: "insensitive",
+          contains: search, // Remove the mode property
         },
       },
       skip: (pageNumber - 1) * pageLimit,
@@ -45,8 +45,7 @@ const getAllSuppliers = async (req, res) => {
     const totalSuppliers = await db.supplier.count({
       where: {
         name: {
-          contains: search,
-          mode: "insensitive",
+          contains: search, // Remove the mode property
         },
       },
     });
@@ -86,13 +85,14 @@ const getSupplierById = async (req, res) => {
 // Update a supplier
 const updateSupplier = async (req, res) => {
   const { id } = req.params;
-  const { name, address, contactPerson, contactNo, email, gstin, uin } =
+  const { code, name, address, contactPerson, contactNo, email, gstin, uin } =
     req.body;
 
   try {
     const updatedSupplier = await db.supplier.update({
       where: { id: parseInt(id) },
       data: {
+        code,
         name,
         address,
         contactPerson,

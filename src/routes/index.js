@@ -8,6 +8,7 @@ const frameTypeRoutes = require("./frameType.routes");
 const shapeTypeRoutes = require("./shapeType.routes");
 const visionTypeRoutes = require("./visionType.routes");
 const coatingTypeRoutes = require("./coatingType.routes");
+const expensesRoutes = require("./expenses.routes");
 
 const rootRouter = Router();
 
@@ -20,5 +21,6 @@ rootRouter.use("/frame", frameTypeRoutes);
 rootRouter.use("/shape", shapeTypeRoutes);
 rootRouter.use("/vision", visionTypeRoutes);
 rootRouter.use("/coating", coatingTypeRoutes);
+rootRouter.use("/expences", expensesRoutes);
 
 module.exports = rootRouter;

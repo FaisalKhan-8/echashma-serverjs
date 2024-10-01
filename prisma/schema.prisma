@@ -64,7 +64,7 @@ model Branch {
 
 model Product {
   id            Int         @id @default(autoincrement())
-  code          Int // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
+  code          String // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
   name          String // Name of the product
   frameTypeId   Int // Foreign key to FrameType
   frameType     FrameType   @relation(fields: [frameTypeId], references: [id])
@@ -82,6 +82,7 @@ model Product {
 
 model Supplier {
   id            Int      @id @default(autoincrement())
+  code          String
   name          String // Supplier name
   address       String // Supplier address
   contactPerson String // Contact person for the supplier
@@ -98,24 +99,37 @@ model Supplier {
 
 model FrameType {
   id       Int       @id @default(autoincrement())
+  code     String
   name     String // Rimless, Metallic, Sheet, etc.
   products Product[] // Relation to products
 }
 
 model ShapeType {
   id       Int       @id @default(autoincrement())
+  code     String
   name     String // Round, Square, Hexagon, etc.
   products Product[] // Relation to products
 }
 
 model VisionType {
   id       Int       @id @default(autoincrement())
+  code     String
   name     String // Single Vision, Bi-Focal, Progressive, etc.
   products Product[] // Relation to products
 }
 
 model CoatingType {
   id       Int       @id @default(autoincrement())
-  name     String // Without Anti-Glare, Blue Block, etc.
+  code     String
+  name     String
   products Product[] // Relation to products
+}
+
+model Expences {
+  id          Int      @id @default(autoincrement())
+  name        String
+  amount      Float
+  description String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
 }
