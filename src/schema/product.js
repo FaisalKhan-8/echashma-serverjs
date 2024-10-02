@@ -1,15 +1,16 @@
 const { z } = require("zod");
 
 const CreateProductSchema = z.object({
-  code: z.number().min(1, "Code must be greater than 0"),
+  code: z.string().min(1, "Code must be at least 1 character"),
   name: z.string().min(2, "Name must be at least 2 characters long"),
-  frameType: z.string().min(1, "Frame type is required"),
-  shapeType: z.string().min(1, "Shape type is required"),
-  visionType: z.string().min(1, "Vision type is required"),
-  coatingType: z.string().min(1, "Coating type is required"),
+  frameType: z.string().transform((val) => parseInt(val, 10)),
+  shapeType: z.string().transform((val) => parseInt(val, 10)),
+  visionType: z.string().transform((val) => parseInt(val, 10)),
+  coatingType: z.string().transform((val) => parseInt(val, 10)),
   branchIds: z
     .array(z.string().transform((val) => parseInt(val, 10)))
     .optional(),
+  supplierIds: z.array(z.string().transform((val) => parseInt(val, 10))),
 });
 
 module.exports = { CreateProductSchema };

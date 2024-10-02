@@ -1,3 +1,5 @@
+const { z } = require("zod");
+const { CreateProductSchema } = require("../schema/product");
 const db = require("../utils/db.config");
 
 // Create a new product
@@ -9,20 +11,40 @@ const createProduct = async (req, res) => {
     shapeTypeId,
     visionTypeId,
     coatingTypeId,
-    supplierIds, // Array of supplier IDs to associate with the product
+    supplierIds,
+    branchIds,
   } = req.body;
 
   try {
+    // Validate the request body against the schema
+    const parsedData = CreateProductSchema.parse({
+      code,
+      name,
+      frameType: frameTypeId, // Use frameTypeId here
+      shapeType: shapeTypeId, // Use shapeTypeId here
+      visionType: visionTypeId, // Use visionTypeId here
+      coatingType: coatingTypeId, // Use coatingTypeId here
+      branchIds,
+      supplierIds, // Include supplierIds for validation
+    });
+
+    // Proceed with product creation using parsedData
     const newProduct = await db.product.create({
       data: {
-        code,
-        name,
-        frameTypeId,
-        shapeTypeId,
-        visionTypeId,
-        coatingTypeId,
+        code: parsedData.code,
+        name: parsedData.name,
+        frameTypeId: parsedData.frameType,
+        shapeTypeId: parsedData.shapeType,
+        visionTypeId: parsedData.visionType,
+        coatingTypeId: parsedData.coatingType,
         suppliers: {
-          connect: supplierIds.map((id) => ({ id })), // Connect existing suppliers
+          connect: parsedData.supplierIds
+            ? [{ id: parseInt(parsedData.supplierIds, 10) }]
+            : [], // Connect existing suppliers
+        },
+        branches: {
+          connect:
+            parsedData.branchIds?.map((id) => ({ id: parseInt(id, 10) })) || [], // Connect existing branches
         },
       },
       include: {
@@ -31,16 +53,22 @@ const createProduct = async (req, res) => {
         visionType: true,
         coatingType: true,
         suppliers: true, // Include suppliers in the response
+        branches: true, // Include branches in the response
       },
     });
+
     res.status(201).json(newProduct);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      // Handle Zod validation errors
+      return res.status(400).json({ errors: error.errors });
+    }
     console.error(error);
     res.status(500).json({ error: "Unable to create product" });
   }
 };
 
-// Get all products with pagination and search
+// Get all products with pagination, search, and associated branches
 const getAllProducts = async (req, res) => {
   const { page = 1, limit = 10, search = "" } = req.query; // Get query parameters
   const pageNumber = parseInt(page);
@@ -49,10 +77,8 @@ const getAllProducts = async (req, res) => {
   try {
     const products = await db.product.findMany({
       where: {
-        // Search condition
         name: {
           contains: search, // Search for products by name
-          mode: "insensitive", // Case-insensitive search
         },
       },
       skip: (pageNumber - 1) * pageLimit, // Skip to the right page
@@ -63,6 +89,7 @@ const getAllProducts = async (req, res) => {
         visionType: true,
         coatingType: true,
         suppliers: true, // Include suppliers in the response
+        branches: true, // Include branches in the response
       },
     });
 
@@ -71,7 +98,6 @@ const getAllProducts = async (req, res) => {
       where: {
         name: {
           contains: search,
-          mode: "insensitive",
         },
       },
     });
@@ -88,7 +114,7 @@ const getAllProducts = async (req, res) => {
   }
 };
 
-// Get a single product by ID
+// Get a single product by ID, including all associated details
 const getProductById = async (req, res) => {
   const { id } = req.params;
 
@@ -100,6 +126,8 @@ const getProductById = async (req, res) => {
         shapeType: true,
         visionType: true,
         coatingType: true,
+        suppliers: true,
+        branches: true, // Include branches in the response
       },
     });
     if (!product) {
@@ -112,11 +140,19 @@ const getProductById = async (req, res) => {
   }
 };
 
-// Update a product by ID
+// Update a product by ID, including associations with suppliers and branches
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const { code, name, frameTypeId, shapeTypeId, visionTypeId, coatingTypeId } =
-    req.body;
+  const {
+    code,
+    name,
+    frameTypeId,
+    shapeTypeId,
+    visionTypeId,
+    coatingTypeId,
+    supplierIds,
+    branchIds,
+  } = req.body;
 
   try {
     const updatedProduct = await db.product.update({
@@ -124,10 +160,24 @@ const updateProduct = async (req, res) => {
       data: {
         code,
         name,
-        frameTypeId,
-        shapeTypeId,
-        visionTypeId,
-        coatingTypeId,
+        frameTypeId: parseInt(frameTypeId, 10), // Convert to integer
+        shapeTypeId: parseInt(shapeTypeId, 10), // Convert to integer
+        visionTypeId: parseInt(visionTypeId, 10), // Convert to integer
+        coatingTypeId: parseInt(coatingTypeId, 10), // Convert to integer
+        suppliers: {
+          set: supplierIds.map((id) => ({ id: parseInt(id, 10) })), // Update suppliers
+        },
+        branches: {
+          set: branchIds.map((id) => ({ id: parseInt(id, 10) })), // Update branches
+        },
+      },
+      include: {
+        frameType: true,
+        shapeType: true,
+        visionType: true,
+        coatingType: true,
+        suppliers: true,
+        branches: true,
       },
     });
     res.status(200).json(updatedProduct);
@@ -137,7 +187,7 @@ const updateProduct = async (req, res) => {
   }
 };
 
-// Delete a product by ID
+// Delete a product by ID, removing associations with suppliers and branches
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
 
@@ -152,6 +202,61 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+const getProductsByUserBranches = async (
+  userId,
+  page = 1,
+  pageSize = 10,
+  searchTerm = ""
+) => {
+  try {
+    // Find the user and include only the branches and their products
+    const userWithBranches = await db.user.findUnique({
+      where: { id: userId },
+      include: {
+        branches: {
+          include: {
+            products: {
+              include: {
+                frameType: true,
+                shapeType: true,
+                visionType: true,
+                coatingType: true,
+              },
+              where: {
+                name: {
+                  contains: searchTerm, // Search for products by name
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Extract products from the branches and flatten the array
+    const products = userWithBranches
+      ? userWithBranches.branches.flatMap((branch) => branch.products)
+      : [];
+
+    // Implement pagination
+    const totalProducts = products.length;
+    const paginatedProducts = products.slice(
+      (page - 1) * pageSize,
+      page * pageSize
+    );
+
+    return {
+      products: paginatedProducts,
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / pageSize),
+      currentPage: page,
+    };
+  } catch (error) {
+    console.error("Error fetching products for user branches:", error);
+    throw error;
+  }
+};
+
 // Export functions
 module.exports = {
   createProduct,
@@ -159,4 +264,5 @@ module.exports = {
   getProductById,
   updateProduct,
   deleteProduct,
+  getProductsByUserBranches,
 };
