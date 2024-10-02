@@ -9,6 +9,8 @@ const authorizeAdmin = require("../middleware/authorizeAdmin");
 
 const authRoutes = Router();
 
+// TODO: update user by id and get single by id
+
 authRoutes.post("/createUser", authorizeAdmin, CreateUser);
 authRoutes.post("/login", Login);
 authRoutes.get("/getAllUser", authorizeAdmin, GetAllUser);
