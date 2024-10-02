@@ -1,5 +1,8 @@
 const { z } = require("zod");
-const { CreateProductSchema } = require("../schema/product");
+const {
+  CreateProductSchema,
+  UpdateProductSchema,
+} = require("../schema/product");
 const db = require("../utils/db.config");
 
 // Create a new product
@@ -143,34 +146,45 @@ const getProductById = async (req, res) => {
 // Update a product by ID, including associations with suppliers and branches
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const {
-    code,
-    name,
-    frameTypeId,
-    shapeTypeId,
-    visionTypeId,
-    coatingTypeId,
-    supplierIds,
-    branchIds,
-  } = req.body;
 
   try {
+    // Validate request body against the schema
+    const validatedData = UpdateProductSchema.parse(req.body);
+
+    const {
+      code,
+      name,
+      frameType,
+      shapeType,
+      visionType,
+      coatingType,
+      supplierIds,
+      branchIds,
+    } = validatedData;
+
+    // Create a data object for the update, adding properties only if they exist
+    const data = {
+      ...(code && { code }), // Only add code if it exists
+      ...(name && { name }), // Only add name if it exists
+      ...(frameType !== undefined && { frameTypeId: parseInt(frameType, 10) }), // Only add if provided
+      ...(shapeType !== undefined && { shapeTypeId: parseInt(shapeType, 10) }), // Only add if provided
+      ...(visionType !== undefined && {
+        visionTypeId: parseInt(visionType, 10),
+      }), // Only add if provided
+      ...(coatingType !== undefined && {
+        coatingTypeId: parseInt(coatingType, 10),
+      }), // Only add if provided
+      ...(supplierIds && {
+        suppliers: { set: supplierIds.map((id) => ({ id: parseInt(id, 10) })) },
+      }), // Only add if supplierIds exist
+      ...(branchIds && {
+        branches: { set: branchIds.map((id) => ({ id: parseInt(id, 10) })) },
+      }), // Only add if branchIds exist
+    };
+
     const updatedProduct = await db.product.update({
       where: { id: Number(id) },
-      data: {
-        code,
-        name,
-        frameTypeId: parseInt(frameTypeId, 10), // Convert to integer
-        shapeTypeId: parseInt(shapeTypeId, 10), // Convert to integer
-        visionTypeId: parseInt(visionTypeId, 10), // Convert to integer
-        coatingTypeId: parseInt(coatingTypeId, 10), // Convert to integer
-        suppliers: {
-          set: supplierIds.map((id) => ({ id: parseInt(id, 10) })), // Update suppliers
-        },
-        branches: {
-          set: branchIds.map((id) => ({ id: parseInt(id, 10) })), // Update branches
-        },
-      },
+      data,
       include: {
         frameType: true,
         shapeType: true,
@@ -180,8 +194,14 @@ const updateProduct = async (req, res) => {
         branches: true,
       },
     });
+
     res.status(200).json(updatedProduct);
   } catch (error) {
+    // Handle Zod validation errors
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors }); // Return validation errors
+    }
+
     console.error(error);
     res.status(500).json({ error: "Unable to update product" });
   }

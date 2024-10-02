@@ -13,4 +13,31 @@ const CreateProductSchema = z.object({
   supplierIds: z.array(z.string().transform((val) => parseInt(val, 10))),
 });
 
-module.exports = { CreateProductSchema };
+const UpdateProductSchema = z.object({
+  code: z.string().min(1, "Code must be at least 1 character").optional(),
+  name: z.string().min(2, "Name must be at least 2 characters long").optional(),
+  frameType: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .optional(),
+  shapeType: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .optional(),
+  visionType: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .optional(),
+  coatingType: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .optional(),
+  branchIds: z
+    .array(z.string().transform((val) => parseInt(val, 10)))
+    .optional(),
+  supplierIds: z
+    .array(z.string().transform((val) => parseInt(val, 10)))
+    .optional(),
+});
+
+module.exports = { CreateProductSchema, UpdateProductSchema };
