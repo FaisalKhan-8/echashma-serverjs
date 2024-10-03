@@ -13,32 +13,31 @@ enum Roles {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   name       String?
-  email      String   @unique
+  email      String    @unique
   password   String
   avatar     String?
-  role       Roles    @default(SUBADMIN)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-  uuid       String   @unique @default(uuid())
-
-  companies Companies[] @relation("UserCompanies")
-  branches  Branch[]    @relation("UserBranches")
+  role       Roles     @default(SUBADMIN)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+  uuid       String    @unique @default(uuid())
+  companies  Company[] @relation("UserCompanies")
+  branches   Branch[]  @relation("UserBranches")
 }
 
-model Companies {
+model Company {
   id            Int      @id @default(autoincrement())
   companyName   String   @unique
   address       String
   contactPerson String
   phone         String
   email         String   @unique
-  gst           String?  @unique
+  gst           String?  @unique // Optional: Review uniqueness requirement
   pancard       String
   aadhaarcard   String
   created_at    DateTime @default(now())
-  updated_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
   users    User[]   @relation("UserCompanies")
@@ -53,11 +52,11 @@ model Branch {
   email         String?  @unique
   contactPerson String
   created_at    DateTime @default(now())
-  updated_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
-  company   Companies @relation("CompanyBranches", fields: [companyId], references: [id])
-  companyId Int // Foreign key to Companies
+  company   Company   @relation("CompanyBranches", fields: [companyId], references: [id])
+  companyId Int // Foreign key to Company
   users     User[]    @relation("UserBranches") // Many-to-many relation with User
   products  Product[] @relation("BranchProducts") // Many-to-many relation with Product
 }
@@ -75,7 +74,7 @@ model Product {
   coatingTypeId Int // Foreign key to CoatingType
   coatingType   CoatingType @relation(fields: [coatingTypeId], references: [id])
   created_at    DateTime    @default(now())
-  updated_at    DateTime    @default(now())
+  updated_at    DateTime    @default(now()) @updatedAt
   branches      Branch[]    @relation("BranchProducts") // Many-to-many relation with Branch
   suppliers     Supplier[]  @relation("ProductSuppliers") // Many-to-many relation with Supplier
 }
@@ -91,7 +90,7 @@ model Supplier {
   gstin         String?  @unique // Optional GSTIN number
   uin           String? // Optional UIN number
   created_at    DateTime @default(now())
-  updated_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
   products Product[] @relation("ProductSuppliers") // Many-to-many relation with Product
@@ -125,11 +124,11 @@ model CoatingType {
   products Product[] // Relation to products
 }
 
-model Expences {
+model Expense {
   id          Int      @id @default(autoincrement())
   name        String
   amount      Float
   description String
   created_at  DateTime @default(now())
-  updated_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
 }

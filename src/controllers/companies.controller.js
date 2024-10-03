@@ -56,7 +56,7 @@ const createCompany = async (req, res, next) => {
     } = parsedBody;
 
     // Check if the company already exists
-    const existingCompany = await db.companies.findUnique({
+    const existingCompany = await db.company.findUnique({
       where: { companyName },
     });
 
@@ -72,7 +72,7 @@ const createCompany = async (req, res, next) => {
 
     // Check if the GST number is already in use
     if (gst) {
-      const existingGst = await db.companies.findUnique({
+      const existingGst = await db.company.findUnique({
         where: { gst },
       });
       if (existingGst) {
@@ -85,7 +85,7 @@ const createCompany = async (req, res, next) => {
 
     // Check if the email is already in use
     if (email) {
-      const existingEmail = await db.companies.findUnique({
+      const existingEmail = await db.company.findUnique({
         where: { email },
       });
       if (existingEmail) {
@@ -94,7 +94,7 @@ const createCompany = async (req, res, next) => {
     }
 
     // Create the new company in the database
-    const newCompany = await db.companies.create({
+    const newCompany = await db.company.create({
       data: {
         companyName,
         address,
@@ -129,46 +129,47 @@ const createCompany = async (req, res, next) => {
 };
 
 // get All Company
-async function getAllCompanies(req, res) {
+async function getAllCompanies(req, res, next) {
   const { page = 1, pageSize = 10, searchTerm = "" } = req.query;
   const pageSizeNumber = parseInt(pageSize, 10) || 10;
   const pageNumber = parseInt(page, 10) || 1;
 
-  // Get the total count of companies matching the search term
-  const companiesCount = await db.companies.findMany({
-    where: {
-      companyName: {
-        contains: searchTerm,
-        // Remove mode: "insensitive"
+  try {
+    // Get the total count of companies matching the search term
+    const totalRecords = await db.company.count({
+      where: {
+        companyName: {
+          contains: searchTerm,
+        },
       },
-    },
-    select: {
-      id: true, // Just an example; select any field you need
-    },
-  });
+    });
 
-  const totalRecords = companiesCount.length;
-
-  // Now, retrieve the companies with pagination
-  const companies = await db.companies.findMany({
-    where: {
-      companyName: {
-        contains: searchTerm,
+    // Now, retrieve the companies with pagination
+    const companies = await db.company.findMany({
+      where: {
+        companyName: {
+          contains: searchTerm,
+        },
       },
-    },
-    skip: (pageNumber - 1) * pageSizeNumber,
-    take: pageSizeNumber,
-  });
+      include: {
+        users: true, // Ensure 'users' is a valid relation
+      },
+      skip: (pageNumber - 1) * pageSizeNumber,
+      take: pageSizeNumber,
+    });
 
-  res.json({
-    companies,
-    pagination: {
-      page: pageNumber,
-      pageSize: pageSizeNumber,
-      totalRecords,
-      totalPages: Math.ceil(totalRecords / pageSizeNumber),
-    },
-  });
+    res.json({
+      companies,
+      pagination: {
+        page: pageNumber,
+        pageSize: pageSizeNumber,
+        totalRecords,
+        totalPages: Math.ceil(totalRecords / pageSizeNumber),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
 // update company
@@ -196,7 +197,7 @@ const updateCompany = async (req, res, next) => {
     }
 
     // Find the company to be updated
-    const existingCompany = await db.companies.findUnique({
+    const existingCompany = await db.company.findUnique({
       where: { id: companyIdNumber },
     });
 
@@ -206,7 +207,7 @@ const updateCompany = async (req, res, next) => {
 
     // Check if the new company name is already taken by another company
     if (companyName && companyName !== existingCompany.companyName) {
-      const companyNameExists = await db.companies.findUnique({
+      const companyNameExists = await db.company.findUnique({
         where: { companyName },
       });
 
@@ -227,7 +228,7 @@ const updateCompany = async (req, res, next) => {
       : existingCompany.aadhaarcard;
 
     // Update the company in the database
-    const updatedCompany = await db.companies.update({
+    const updatedCompany = await db.company.update({
       where: { id: companyIdNumber },
       data: {
         companyName: companyName || existingCompany.companyName,
@@ -263,6 +264,45 @@ const updateCompany = async (req, res, next) => {
   }
 };
 
-// TODO: Delete company api
+// Delete Company Controller
+const deleteCompany = async (req, res, next) => {
+  try {
+    const { companyId } = req.params; // Assuming companyId is passed as a route parameter
 
-module.exports = { createCompany, upload, getAllCompanies, updateCompany };
+    // Convert companyId to integer
+    const companyIdNumber = parseInt(companyId, 10);
+
+    if (isNaN(companyIdNumber)) {
+      throw new AppError("Invalid company ID provided!", 400);
+    }
+
+    // Check if the company exists
+    const existingCompany = await db.company.findUnique({
+      where: { id: companyIdNumber },
+    });
+
+    if (!existingCompany) {
+      throw new AppError("Company not found!", 404);
+    }
+
+    // Delete the company
+    await db.company.delete({
+      where: { id: companyIdNumber },
+    });
+
+    // Respond with success message
+    res.status(200).json({
+      message: "Company deleted successfully!",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createCompany,
+  upload,
+  getAllCompanies,
+  updateCompany,
+  deleteCompany,
+};

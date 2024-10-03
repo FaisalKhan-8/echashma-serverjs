@@ -19,7 +19,7 @@ const UpdateBranchSchema = z.object({
   contactPerson: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
-  userIds: z.array(z.string()).optional(),
+  userId: z.array(z.string()).optional(),
 });
 
 module.exports = { CreateBranchSchema, UpdateBranchSchema };

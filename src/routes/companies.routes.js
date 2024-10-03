@@ -5,6 +5,7 @@ const {
   upload,
   getAllCompanies,
   updateCompany,
+  deleteCompany,
 } = require("../controllers/companies.controller");
 
 const companyRoutes = Router();
@@ -28,5 +29,6 @@ companyRoutes.put(
   authorizeAdmin,
   updateCompany
 );
+companyRoutes.delete("/deleteCompany/:id", authorizeAdmin, deleteCompany);
 
 module.exports = companyRoutes;

@@ -23,7 +23,7 @@ const createBranch = async (req, res, next) => {
 
     // Check if the company exists if companyId is provided
     if (companyId) {
-      const existingCompany = await db.companies.findUnique({
+      const existingCompany = await db.company.findUnique({
         where: { id: companyId },
       });
 

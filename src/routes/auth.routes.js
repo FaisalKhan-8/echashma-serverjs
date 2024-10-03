@@ -11,7 +11,7 @@ const authRoutes = Router();
 
 // TODO: update user by id and get single by id
 
-authRoutes.post("/createUser", authorizeAdmin, CreateUser);
+authRoutes.post("/createUser", CreateUser);
 authRoutes.post("/login", Login);
 authRoutes.get("/getAllUser", authorizeAdmin, GetAllUser);
 authRoutes.put("/updateUser", authorizeAdmin, UpdateUser);
