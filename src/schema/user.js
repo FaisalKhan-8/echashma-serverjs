@@ -17,7 +17,6 @@ const LoginUserSchema = z.object({
 });
 
 const UpdateUserSchema = z.object({
-  userId: z.number().int(),
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
   name: z.string().min(1).optional(),

@@ -150,15 +150,15 @@ const GetAllUser = async (req, res, next) => {
 };
 
 const UpdateUser = async (req, res, next) => {
+  const { id } = req.params;
+  const { email, password, name, avatar, role, companyId } = req.body;
   try {
     // Validate request body using Zod schema
     UpdateUserSchema.parse(req.body);
 
-    const { userId, email, password, name, avatar, role, companyId } = req.body;
-
     // Find the user to be updated
     const existingUser = await db.user.findUnique({
-      where: { id: userId },
+      where: { id: parseInt(id) },
     });
 
     if (!existingUser) {
@@ -196,7 +196,7 @@ const UpdateUser = async (req, res, next) => {
 
     // Update the user with the new data
     const updatedUser = await db.user.update({
-      where: { id: userId },
+      where: { id: parseInt(id) },
       data: {
         email: email || existingUser.email,
         password: hashedPassword,
@@ -204,9 +204,6 @@ const UpdateUser = async (req, res, next) => {
         avatar: avatar || existingUser.avatar,
         role: role || existingUser.role,
         companyId: companyId || existingUser.companyId, // Optional company assignment
-      },
-      include: {
-        company: true, // Include company details in the response
       },
     });
 
@@ -230,10 +227,37 @@ const UpdateUser = async (req, res, next) => {
 };
 
 // TODO: Delete user api
+const DeleteUser = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    // Find the user to be deleted
+    const existingUser = await db.user.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!existingUser) {
+      throw new AppError("User not found!", 404);
+    }
+
+    // Delete the user
+    await db.user.delete({
+      where: { id: parseInt(id) },
+    });
+
+    res.status(200).json({
+      message: "User deleted successfully!",
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    next(new AppError("Failed to delete user", 500));
+  }
+};
 
 module.exports = {
   CreateUser,
   Login,
   GetAllUser,
   UpdateUser,
+  DeleteUser,
 };

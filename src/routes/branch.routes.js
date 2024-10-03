@@ -13,7 +13,7 @@ const branchRoutes = Router();
 
 branchRoutes.post("/createBranch", authorizeAdmin, createBranch);
 branchRoutes.get("/getBranch", authenticateUser, getBranches);
-branchRoutes.put("/updateBranch/:id", authorizeAdmin, updateBranch);
+branchRoutes.put("/update/:id", authorizeAdmin, updateBranch);
 branchRoutes.delete("/deleteBranch/:id", authorizeAdmin, deleteBranch);
 
 module.exports = branchRoutes;
