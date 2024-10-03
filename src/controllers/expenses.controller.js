@@ -8,7 +8,7 @@ const getAllExpenses = async (req, res) => {
   const limitNumber = Number(limit);
 
   try {
-    const totalExpenses = await db.expences.count({
+    const totalExpenses = await db.expense.count({
       where: {
         name: {
           contains: search,
@@ -16,7 +16,7 @@ const getAllExpenses = async (req, res) => {
       },
     });
 
-    const expenses = await db.expences.findMany({
+    const expenses = await db.expense.findMany({
       where: {
         name: {
           contains: search,
@@ -52,7 +52,7 @@ const createExpense = async (req, res) => {
   }
 
   try {
-    const newExpense = await db.expences.create({
+    const newExpense = await db.expense.create({
       data: {
         name,
         amount,
@@ -75,14 +75,14 @@ const updateExpense = async (req, res) => {
   const { name, amount, description } = req.body;
 
   try {
-    const existingExpense = await db.expences.findUnique({
+    const existingExpense = await db.expense.findUnique({
       where: { id: Number(id) },
     });
     if (!existingExpense) {
       return res.status(404).json({ error: "Expense not found." });
     }
 
-    const updatedExpense = await db.expences.update({
+    const updatedExpense = await db.expense.update({
       where: { id: Number(id) },
       data: {
         name,
@@ -105,14 +105,14 @@ const deleteExpense = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const existingExpense = await db.expences.findUnique({
+    const existingExpense = await db.expense.findUnique({
       where: { id: Number(id) },
     });
     if (!existingExpense) {
       return res.status(404).json({ error: "Expense not found." });
     }
 
-    await db.expences.delete({
+    await db.expense.delete({
       where: { id: Number(id) },
     });
 
