@@ -62,21 +62,22 @@ model Branch {
 }
 
 model Product {
-  id            Int         @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   code          String // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
   name          String // Name of the product
   frameTypeId   Int // Foreign key to FrameType
-  frameType     FrameType   @relation(fields: [frameTypeId], references: [id])
+  frameType     FrameType      @relation(fields: [frameTypeId], references: [id])
   shapeTypeId   Int // Foreign key to ShapeType
-  shapeType     ShapeType   @relation(fields: [shapeTypeId], references: [id])
+  shapeType     ShapeType      @relation(fields: [shapeTypeId], references: [id])
   visionTypeId  Int // Foreign key to VisionType
-  visionType    VisionType  @relation(fields: [visionTypeId], references: [id])
+  visionType    VisionType     @relation(fields: [visionTypeId], references: [id])
   coatingTypeId Int // Foreign key to CoatingType
-  coatingType   CoatingType @relation(fields: [coatingTypeId], references: [id])
-  created_at    DateTime    @default(now())
-  updated_at    DateTime    @default(now()) @updatedAt
-  branches      Branch[]    @relation("BranchProducts") // Many-to-many relation with Branch
-  suppliers     Supplier[]  @relation("ProductSuppliers") // Many-to-many relation with Supplier
+  coatingType   CoatingType    @relation(fields: [coatingTypeId], references: [id])
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @default(now()) @updatedAt
+  branches      Branch[]       @relation("BranchProducts") // Many-to-many relation with Branch
+  suppliers     Supplier[]     @relation("ProductSuppliers") // Many-to-many relation with Supplier
+  PurchaseItem  PurchaseItem[]
 }
 
 model Supplier {
@@ -93,7 +94,8 @@ model Supplier {
   updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
-  products Product[] @relation("ProductSuppliers") // Many-to-many relation with Product
+  products Product[]  @relation("ProductSuppliers") // Many-to-many relation with Product
+  Purchase Purchase[]
 }
 
 model FrameType {
@@ -122,6 +124,37 @@ model CoatingType {
   code     String
   name     String
   products Product[] // Relation to products
+}
+
+model Purchase {
+  id           Int      @id @default(autoincrement())
+  purchaseDate DateTime // Purchase date
+  billNo       String // Bill number
+  supplierId   Int // Foreign key to Supplier model
+  totalAmount  Float // Total purchase amount
+  totalCGST    Float? // CGST amount
+  totalSGST    Float? // SGST amount
+  netTotal     Float // Final net total
+
+  supplier Supplier       @relation(fields: [supplierId], references: [id])
+  items    PurchaseItem[] @relation("PurchaseToPurchaseItem")
+
+  createdAt DateTime @default(now()) // Creation timestamp
+  updatedAt DateTime @updatedAt // Update timestamp
+}
+
+model PurchaseItem {
+  id         Int    @id @default(autoincrement())
+  purchaseId Int // Foreign key to Purchase
+  productId  Int // Foreign key to Product model
+  quantity   Int // Product quantity
+  rate       Float // Rate per product
+  amount     Float // Total amount for the product (rate * quantity)
+  cgst       Float? // CGST for the product
+  sgst       Float? // SGST for the product
+
+  purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id])
+  Product  Product  @relation(fields: [productId], references: [id])
 }
 
 model Expense {
