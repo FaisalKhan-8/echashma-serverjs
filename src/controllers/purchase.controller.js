@@ -89,8 +89,25 @@ exports.createPurchase = async (req, res) => {
 // Update a purchase with GST and discount calculations
 exports.updatePurchase = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { purchaseDate, billNo, supplierId, items } = req.body;
+    const { id } = req.params; // Extract purchase ID from the URL parameters
+    const { purchaseDate, billNo, supplierId, items } = req.body; // Extract necessary fields from the request body
+
+    // Validate required fields
+    if (
+      !purchaseDate ||
+      !billNo ||
+      !supplierId ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            'All fields are required, and items must be a non-empty array.',
+        });
+    }
 
     // Calculate totals for each item
     let totalAmount = 0;
@@ -127,9 +144,9 @@ exports.updatePurchase = async (req, res) => {
 
     // Update the purchase record in the database
     const purchase = await db.purchase.update({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id) }, // Ensure ID is parsed as an integer
       data: {
-        purchaseDate: new Date(purchaseDate),
+        purchaseDate: new Date(purchaseDate), // Convert purchaseDate to Date object
         billNo,
         supplierId,
         totalAmount,
@@ -138,34 +155,118 @@ exports.updatePurchase = async (req, res) => {
         netTotal: netTotal + roundOff,
         items: {
           deleteMany: {}, // Remove existing items before updating
-          create: purchaseItemsData.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            rate: item.rate,
-            amount: item.amount,
-            cgst: item.cgst,
-            sgst: item.sgst,
-          })),
+          create: purchaseItemsData, // Add new items
         },
       },
-      include: { items: true },
+      include: { items: true }, // Include items in the response
     });
 
-    res.status(200).json({ success: true, data: purchase });
+    res.status(200).json({ success: true, data: purchase }); // Send the updated purchase data
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    res.status(500).json({ success: false, message: 'Internal server error' }); // Generic error message
   }
 };
 
 // Get all purchases
 exports.getAllPurchases = async (req, res) => {
+  const { page = 1, limit = 10, search = '' } = req.query; // Extract page, limit, and search from query parameters
+
+  const skip = (page - 1) * limit; // Calculate how many records to skip
+  const take = parseInt(limit); // Limit of records per page
+
   try {
+    // Perform search query
     const purchases = await db.purchase.findMany({
-      include: { items: true }, // Include purchase items in the response
+      skip, // <-- Add skip here
+      take, // <-- Add take here
+      where: {
+        OR: [
+          {
+            items: {
+              some: {
+                Product: {
+                  name: {
+                    contains: search, // Search by product name
+                  },
+                },
+              },
+            },
+          },
+          {
+            items: {
+              some: {
+                Product: {
+                  suppliers: {
+                    some: {
+                      name: {
+                        contains: search, // Search by supplier name
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        items: {
+          include: {
+            Product: {
+              include: {
+                suppliers: true, // Include the suppliers for each product
+              },
+            },
+          },
+        },
+      },
     });
 
-    res.status(200).json({ success: true, data: purchases });
+    // Get total count for pagination purposes
+    const totalPurchases = await db.purchase.count({
+      where: {
+        OR: [
+          {
+            items: {
+              some: {
+                Product: {
+                  name: {
+                    contains: search,
+                  },
+                },
+              },
+            },
+          },
+          {
+            items: {
+              some: {
+                Product: {
+                  suppliers: {
+                    some: {
+                      name: {
+                        contains: search,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: purchases,
+      pagination: {
+        total: totalPurchases,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalPurchases / limit),
+      },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -178,7 +279,13 @@ exports.getPurchaseById = async (req, res) => {
     const { id } = req.params;
     const purchase = await db.purchase.findUnique({
       where: { id: parseInt(id) },
-      include: { items: true },
+      include: {
+        items: {
+          include: {
+            Product: true, // Include the product details for each purchase item
+          },
+        },
+      },
     });
 
     if (!purchase) {
@@ -196,27 +303,45 @@ exports.getPurchaseById = async (req, res) => {
 
 // Delete a specific purchase by ID
 exports.deletePurchase = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const { purchaseId } = req.params;
 
-    const purchase = await db.purchase.delete({
-      where: { id: parseInt(id) },
-      include: { items: true },
+  if (!purchaseId) {
+    return res.status(400).json({ error: 'Purchase ID is required' });
+  }
+
+  try {
+    // Check if the purchase exists
+    const purchaseExists = await db.purchase.findUnique({
+      where: {
+        id: parseInt(purchaseId),
+      },
     });
 
-    if (!purchase) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Purchase not found' });
+    if (!purchaseExists) {
+      return res.status(404).json({ error: 'Purchase not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Purchase deleted successfully',
-      data: purchase,
+    // Delete related items
+    const deletedItems = await db.purchaseItem.deleteMany({
+      where: {
+        purchaseId: parseInt(purchaseId), // Corrected this line
+      },
     });
+
+    // Delete the purchase
+    const deletedPurchase = await db.purchase.delete({
+      where: { id: parseInt(purchaseId) },
+    });
+
+    console.log('Purchase and related items deleted successfully:', {
+      deletedItems,
+      deletedPurchase,
+    });
+    res.json({ message: 'Purchase deleted successfully', deletedPurchase });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('Error deleting purchase:', error);
+    res
+      .status(500)
+      .json({ error: 'An error occurred while deleting the purchase' });
   }
 };

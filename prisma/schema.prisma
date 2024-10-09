@@ -17,7 +17,7 @@ model User {
   name       String?
   email      String    @unique
   password   String
-  avatar     String?
+  avatar     String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
   role       Roles     @default(SUBADMIN)
   created_at DateTime  @default(now())
   updated_at DateTime  @default(now()) @updatedAt
@@ -137,7 +137,7 @@ model Purchase {
   netTotal     Float // Final net total
 
   supplier Supplier       @relation(fields: [supplierId], references: [id])
-  items    PurchaseItem[] @relation("PurchaseToPurchaseItem")
+  items    PurchaseItem[] @relation("PurchaseToPurchaseItem") // No onDelete here
 
   createdAt DateTime @default(now()) // Creation timestamp
   updatedAt DateTime @updatedAt // Update timestamp
@@ -153,7 +153,7 @@ model PurchaseItem {
   cgst       Float? // CGST for the product
   sgst       Float? // SGST for the product
 
-  purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id])
+  purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
   Product  Product  @relation(fields: [productId], references: [id])
 }
 

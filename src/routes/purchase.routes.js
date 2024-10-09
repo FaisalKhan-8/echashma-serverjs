@@ -12,6 +12,6 @@ PurchaseRoutes.post('/', createPurchase);
 PurchaseRoutes.put('/:id', updatePurchase);
 PurchaseRoutes.get('/', getAllPurchases);
 PurchaseRoutes.get('/:id', getPurchaseById);
-PurchaseRoutes.delete('/:id', deletePurchase);
+PurchaseRoutes.delete('/:purchaseId', deletePurchase);
 
 module.exports = PurchaseRoutes;

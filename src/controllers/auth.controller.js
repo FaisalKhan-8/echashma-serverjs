@@ -1,13 +1,13 @@
-const db = require("../utils/db.config.js");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const db = require('../utils/db.config.js');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const {
   CreateUserSchema,
   LoginUserSchema,
   UpdateUserSchema,
-} = require("../schema/user.js");
-const { AppError } = require("../errors/AppError.js");
-const { z } = require("zod");
+} = require('../schema/user.js');
+const { AppError } = require('../errors/AppError.js');
+const { z } = require('zod');
 
 const { hashSync, compare } = bcrypt;
 
@@ -24,7 +24,7 @@ const CreateUser = async (req, res, next) => {
     });
 
     if (existingUser) {
-      throw new AppError("User already exists!", 400);
+      throw new AppError('User already exists!', 400);
     }
 
     // Hash the password
@@ -37,7 +37,7 @@ const CreateUser = async (req, res, next) => {
         password: hashedPassword,
         name,
         avatar,
-        role: role || "SUBADMIN",
+        role: role || 'SUBADMIN',
         companies: {
           connect: companyId.map((id) => ({ id: parseInt(id, 10) })), // Wrap ID in an object
         },
@@ -49,15 +49,15 @@ const CreateUser = async (req, res, next) => {
 
     // Respond with success message and user data
     res.status(201).json({
-      message: "User created successfully!",
+      message: 'User created successfully!',
       user: newUser,
     });
   } catch (error) {
     // Handle Zod validation errors
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        status: "error",
-        message: "Validation failed",
+        status: 'error',
+        message: 'Validation failed',
         errors: error.errors,
       });
     }
@@ -81,12 +81,12 @@ const Login = async (req, res, next) => {
     });
 
     if (!user) {
-      return next(new AppError("User does not exist!", 404));
+      return next(new AppError('User does not exist!', 404));
     }
 
     const isPasswordValid = await compare(password, user.password);
     if (!isPasswordValid) {
-      return next(new AppError("Invalid credentials!", 401));
+      return next(new AppError('Invalid credentials!', 401));
     }
 
     const token = jwt.sign(
@@ -98,13 +98,13 @@ const Login = async (req, res, next) => {
       process.env.JWT_SECRET
     );
 
-    res.status(200).json({ status: "success", user, token });
+    res.status(200).json({ status: 'success', user, token });
   } catch (error) {
     if (error instanceof z.ZodError) {
       // If Zod validation fails, respond with validation errors
       return res.status(400).json({
-        status: "error",
-        message: "Validation failed",
+        status: 'error',
+        message: 'Validation failed',
         errors: error.errors,
       });
     }
@@ -113,7 +113,7 @@ const Login = async (req, res, next) => {
 };
 
 const GetAllUser = async (req, res, next) => {
-  const { search = "", page = 1, limit = 10 } = req.query;
+  const { search = '', page = 1, limit = 10 } = req.query;
   const skip = (page - 1) * limit;
 
   try {
@@ -140,12 +140,42 @@ const GetAllUser = async (req, res, next) => {
     });
 
     res.json({
-      status: "success",
+      status: 'success',
       users,
     });
   } catch (error) {
-    console.error("Error fetching users:", error);
-    next(new AppError("Failed to fetch users", 500));
+    console.error('Error fetching users:', error);
+    next(new AppError('Failed to fetch users', 500));
+  }
+};
+
+const GetLoggedInUser = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    // Fetch the logged-in user's details from the database
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      include: {
+        companies: true,
+        branches: true,
+        // Include company details if needed
+      },
+    });
+
+    // Check if the user exists
+    if (!user) {
+      throw new AppError('User not found!', 404);
+    }
+
+    // Respond with the user's profile
+    res.status(200).json({
+      status: 'success',
+      user,
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    next(new AppError('Failed to fetch user profile', 500));
   }
 };
 
@@ -162,7 +192,7 @@ const UpdateUser = async (req, res, next) => {
     });
 
     if (!existingUser) {
-      throw new AppError("User not found!", 404);
+      throw new AppError('User not found!', 404);
     }
 
     // Check if the email is already taken by another user
@@ -172,7 +202,7 @@ const UpdateUser = async (req, res, next) => {
       });
 
       if (emailExists) {
-        throw new AppError("Email already in use by another user!", 400);
+        throw new AppError('Email already in use by another user!', 400);
       }
     }
 
@@ -190,7 +220,7 @@ const UpdateUser = async (req, res, next) => {
       });
 
       if (!company) {
-        throw new AppError("Company not found!", 404);
+        throw new AppError('Company not found!', 404);
       }
     }
 
@@ -209,15 +239,15 @@ const UpdateUser = async (req, res, next) => {
 
     // Respond with success message and updated user data
     res.status(200).json({
-      message: "User updated successfully!",
+      message: 'User updated successfully!',
       user: updatedUser,
     });
   } catch (error) {
     // Handle Zod validation errors
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        status: "error",
-        message: "Validation failed",
+        status: 'error',
+        message: 'Validation failed',
         errors: error.errors,
       });
     }
@@ -237,7 +267,7 @@ const DeleteUser = async (req, res, next) => {
     });
 
     if (!existingUser) {
-      throw new AppError("User not found!", 404);
+      throw new AppError('User not found!', 404);
     }
 
     // Delete the user
@@ -246,11 +276,11 @@ const DeleteUser = async (req, res, next) => {
     });
 
     res.status(200).json({
-      message: "User deleted successfully!",
+      message: 'User deleted successfully!',
     });
   } catch (error) {
-    console.error("Error deleting user:", error);
-    next(new AppError("Failed to delete user", 500));
+    console.error('Error deleting user:', error);
+    next(new AppError('Failed to delete user', 500));
   }
 };
 
@@ -258,6 +288,7 @@ module.exports = {
   CreateUser,
   Login,
   GetAllUser,
+  GetLoggedInUser,
   UpdateUser,
   DeleteUser,
 };
