@@ -67,6 +67,7 @@ exports.createPurchase = async (req, res) => {
         productId: item.productId,
         quantity,
         rate,
+        discount, // Include discount here
         amount: amountAfterDiscount, // Store the amount after discount
         cgst,
         sgst,
@@ -90,6 +91,7 @@ exports.createPurchase = async (req, res) => {
             productId: item.productId,
             quantity: item.quantity,
             rate: item.rate,
+            discount: item.discount, // Save the discount
             amount: item.amount,
             cgst: item.cgst,
             sgst: item.sgst,
@@ -117,7 +119,7 @@ exports.updatePurchase = async (req, res) => {
 
     // Conditionally add each field if it is present in the request
     if (purchaseDate) {
-      updateData.purchaseDate = new Date(purchaseDate) // Convert purchaseDate to Date object
+      updateData.purchaseDate = new Date(purchaseDate)
     }
     if (billNo) {
       updateData.billNo = billNo
@@ -151,6 +153,7 @@ exports.updatePurchase = async (req, res) => {
           productId: item.productId,
           quantity: item.quantity,
           rate: item.rate,
+          discount: item.discount, // Update discount
           amount: amountAfterDiscount,
           cgst,
           sgst,

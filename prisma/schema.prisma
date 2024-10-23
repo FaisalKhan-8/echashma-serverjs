@@ -152,6 +152,8 @@ model PurchaseItem {
   amount     Float // Total amount for the product (rate * quantity)
   cgst       Float? // CGST for the product
   sgst       Float? // SGST for the product
+  discount   Float?  @default(0)
+
 
   purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
   Product  Product  @relation(fields: [productId], references: [id])
