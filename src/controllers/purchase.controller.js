@@ -200,6 +200,12 @@ exports.getAllPurchases = async (req, res) => {
       where: {
         OR: [
           {
+            billNo: {
+              // Add condition for invoice number
+              contains: search, // Search by invoice number
+            },
+          },
+          {
             items: {
               some: {
                 Product: {
@@ -244,6 +250,12 @@ exports.getAllPurchases = async (req, res) => {
     const totalPurchases = await db.purchase.count({
       where: {
         OR: [
+          {
+            billNo: {
+              // Add condition for invoice number in total count
+              contains: search,
+            },
+          },
           {
             items: {
               some: {
