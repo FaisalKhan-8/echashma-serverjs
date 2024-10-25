@@ -27,14 +27,18 @@
     ],
     "assets": [
       "src/dist/**/*",
+      "src/uploads/**/*",
       ".env",
       "node_modules/.prisma/**/*",
       "node_modules/@prisma/client/runtime/**/*.node"
     ],
-    "output": "./build/echashma",
     "targets": [
       "node16-win-x64"
-    ]
+    ],
+    "mount": {
+      "uploads": "./uploads",
+      "src/dist": "./src/dist"
+    }
   },
   "devDependencies": {
     "@babel/cli": "^7.25.6",

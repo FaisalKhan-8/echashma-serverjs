@@ -9,10 +9,7 @@ const fs = require('fs')
 
 dotenv.config()
 
-// Create Express application
 const app = express()
-
-// Middleware setup
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
@@ -20,32 +17,34 @@ app.use(express.urlencoded({ extended: true }))
 // API routes
 app.use('/api', rootRouter)
 
-// Resolve path for static files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
-const distPath = path.join(process.cwd(), '/src/dist')
+// Set uploads directory
+const uploadsPath = path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true })
+}
+
+app.use('/uploads', express.static(uploadsPath))
+
+// Set the dist path
+const distPath = path.join(__dirname, 'dist')
 app.use(express.static(distPath))
 app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'))
+  const indexPath = path.join(distPath, 'index.html')
+  res.sendFile(indexPath)
 })
 
 // Error handling middleware
 app.use(errorHandler)
 
-// Function to start the server
+// Start server function
 const startServer = async () => {
-  try {
-    // Find an available port
-    const port = await portfinder.getPortPromise({
-      port: parseInt(process.env.PORT || '8000', 10),
-    })
+  const port = await portfinder.getPortPromise({
+    port: parseInt(process.env.PORT || '8000', 10),
+  })
 
-    app.listen(port, () => {
-      console.log(`Server is running on port: http://localhost:${port}`)
-    })
-  } catch (error) {
-    console.error('Error starting the server:', error)
-  }
+  app.listen(port, () => {
+    console.log(`Server is running on port: http://localhost:${port}`)
+  })
 }
 
-// Start the server
 startServer()
