@@ -27,6 +27,7 @@
     ],
     "assets": [
       "src/dist/**/*",
+      "../uploads/**/*",
       "src/uploads/**/*",
       ".env",
       "node_modules/.prisma/**/*",
@@ -36,7 +37,7 @@
       "node16-win-x64"
     ],
     "mount": {
-      "uploads": "./uploads",
+      "uploads": "../uploads",
       "src/dist": "./src/dist"
     }
   },
