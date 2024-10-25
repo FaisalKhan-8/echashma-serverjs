@@ -33,6 +33,19 @@ app.get('*', (req, res) => {
   res.sendFile(indexPath)
 })
 
+app.get('/uploads/:fileName', (req, res) => {
+  const fileName = req.params.fileName
+  const filePath = path.join(uploadsPath, fileName)
+
+  // Check if the file exists and send it
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      return res.status(404).send('File not found')
+    }
+    res.sendFile(filePath)
+  })
+})
+
 // Error handling middleware
 app.use(errorHandler)
 

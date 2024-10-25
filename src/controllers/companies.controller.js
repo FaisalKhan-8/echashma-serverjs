@@ -65,10 +65,12 @@ const createCompany = async (req, res, next) => {
     }
 
     // Get file paths for PAN card and Aadhaar card images
-    const pancardImage = req.files?.pancard ? req.files.pancard[0].path : null
+    const pancardImage = req.files?.pancard
+      ? req.files.pancard[0].filename
+      : null // Get only the filename
     const aadhaarcardImage = req.files?.aadhaarcard
-      ? req.files.aadhaarcard[0].path
-      : null
+      ? req.files.aadhaarcard[0].filename
+      : null // Get only the filename
 
     // Check if the GST number is already in use
     if (gst) {
@@ -218,11 +220,11 @@ const updateCompany = async (req, res, next) => {
 
     // Get file paths for PAN card and Aadhaar card images if uploaded
     const pancardImage = req.files?.pancard
-      ? req.files.pancard[0].path
-      : existingCompany.pancard
+      ? req.files.pancard[0].filename
+      : null // Get only the filename
     const aadhaarcardImage = req.files?.aadhaarcard
-      ? req.files.aadhaarcard[0].path
-      : existingCompany.aadhaarcard
+      ? req.files.aadhaarcard[0].filename
+      : null // Get only the filename
 
     // Update the company in the database
     const updatedCompany = await db.company.update({
