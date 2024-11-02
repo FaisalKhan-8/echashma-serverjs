@@ -3,13 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "sqlserver" // Specify SQL Server as the provider
   url      = env("DATABASE_URL")
-}
-
-enum Roles {
-  ADMIN
-  SUBADMIN
 }
 
 model User {
@@ -18,7 +13,7 @@ model User {
   email      String    @unique
   password   String
   avatar     String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
-  role       Roles     @default(SUBADMIN)
+  role       String    @default("SUBADMIN") // Changed to String for roles
   created_at DateTime  @default(now())
   updated_at DateTime  @default(now()) @updatedAt
   uuid       String    @unique @default(uuid())
@@ -52,7 +47,7 @@ model Branch {
   email         String?  @unique
   contactPerson String
   created_at    DateTime @default(now())
-  updated_at    DateTime @default(now()) @updatedAt
+  updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
   company   Company   @relation("CompanyBranches", fields: [companyId], references: [id])
@@ -91,10 +86,11 @@ model Supplier {
   gstin         String?  @unique // Optional GSTIN number
   uin           String? // Optional UIN number
   created_at    DateTime @default(now())
-  updated_at    DateTime @default(now()) @updatedAt
+  updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
   products Product[]  @relation("ProductSuppliers") // Many-to-many relation with Product
+
   Purchase Purchase[]
 }
 
@@ -154,10 +150,10 @@ model PurchaseItem {
   sgst       Float? // SGST for the product
   discount   Float?  @default(0)
 
-
   purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
   Product  Product  @relation(fields: [productId], references: [id])
 }
+
 
 model ExpenseCategory {
   id          Int      @id @default(autoincrement())
@@ -172,8 +168,7 @@ model Expense {
   amount          Float
   description     String
   created_at      DateTime @default(now())
-  updated_at      DateTime @default(now()) @updatedAt
+  updated_at      DateTime @updatedAt
   categoryId      Int      // Foreign key reference
   category        ExpenseCategory @relation(fields: [categoryId], references: [id]) // Establishing the relationship
 }
-
