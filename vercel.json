@@ -20,6 +20,10 @@
       "dest": "/uploads/$1"
     },
     {
+      "src": "/src/dist/(.*)",
+      "dest": "/src/dist/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/src/dist/index.html"
     }
