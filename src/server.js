@@ -49,7 +49,12 @@ app.get('/uploads/:fileName', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-const port = parseInt(process.env.PORT || '8000', 10);
-app.listen(port, () => {
-  console.log(`Server is running on port: http://localhost:${port}`);
-});
+// const port = parseInt(process.env.PORT || '8000', 10);
+// app.listen(port, () => {
+//   console.log(`Server is running on port: http://localhost:${port}`);
+// });
+
+// Export the express app as a serverless function for Vercel
+module.exports = (req, res) => {
+  app(req, res);
+};
