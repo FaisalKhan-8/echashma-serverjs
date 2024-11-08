@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "build": "babel src --out-dir dist",
-    "pkg": "pkg . --out build/echashma.exe"
+    "build": "babel src --out-dir dist"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
@@ -20,26 +19,6 @@
     "pkg": "^5.7.0",
     "portfinder": "^1.0.32",
     "zod": "^3.23.8"
-  },
-  "pkg": {
-    "scripts": [
-      "dist/**/*.js"
-    ],
-    "assets": [
-      "src/dist/**/*",
-      "../uploads/**/*",
-      "src/uploads/**/*",
-      ".env",
-      "node_modules/.prisma/**/*",
-      "node_modules/@prisma/client/runtime/**/*.node"
-    ],
-    "targets": [
-      "node16-win-x64"
-    ],
-    "mount": {
-      "uploads": "../uploads",
-      "src/dist": "./src/dist"
-    }
   },
   "devDependencies": {
     "@babel/cli": "^7.25.6",
