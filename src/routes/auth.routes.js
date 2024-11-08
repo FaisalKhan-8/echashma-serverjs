@@ -12,7 +12,7 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 const authRoutes = Router();
 
-authRoutes.post('/createUser', CreateUser);
+authRoutes.post('/createUser', authorizeAdmin, CreateUser);
 authRoutes.post('/login', Login);
 authRoutes.get('/getAllUser', authorizeAdmin, GetAllUser);
 authRoutes.get('/profile', authenticateUser, GetLoggedInUser);

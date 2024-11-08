@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require('express');
 
 const {
   createFrameType,
@@ -6,14 +6,14 @@ const {
   getFrameTypeById,
   updateFrameType,
   deleteFrameType,
-} = require("../controllers/frameType.controller");
+} = require('../controllers/frameType.controller');
 
 const frameTypeRoutes = express.Router();
 
-frameTypeRoutes.post("/create", createFrameType);
-frameTypeRoutes.get("/getAll", getAllFrameTypes);
-frameTypeRoutes.get("/get/:id", getFrameTypeById);
-frameTypeRoutes.put("/update/:id", updateFrameType);
-frameTypeRoutes.delete("/delete/:id", deleteFrameType);
+frameTypeRoutes.post('/create', authenticateUser, createFrameType);
+frameTypeRoutes.get('/getAll', authenticateUser, getAllFrameTypes);
+frameTypeRoutes.get('/get/:id', authenticateUser, getFrameTypeById);
+frameTypeRoutes.put('/update/:id', authenticateUser, updateFrameType);
+frameTypeRoutes.delete('/delete/:id', authenticateUser, deleteFrameType);
 
 module.exports = frameTypeRoutes;

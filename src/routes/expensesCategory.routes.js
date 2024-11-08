@@ -1,18 +1,18 @@
-const express = require('express')
+const express = require('express');
 const {
   createExpenseCategory,
   getExpenseCategories,
   updateExpenseCategory,
   deleteExpenseCategory,
-} = require('../controllers/ExpenseCategory.controller')
-const expenseCategoryRoutes = express.Router()
+} = require('../controllers/ExpenseCategory.controller');
+const expenseCategoryRoutes = express.Router();
 
-expenseCategoryRoutes.post('/', createExpenseCategory)
+expenseCategoryRoutes.post('/', authenticateUser, createExpenseCategory);
 
-expenseCategoryRoutes.get('/', getExpenseCategories)
+expenseCategoryRoutes.get('/', authenticateUser, getExpenseCategories);
 
-expenseCategoryRoutes.put('/:id', updateExpenseCategory)
+expenseCategoryRoutes.put('/:id', authenticateUser, updateExpenseCategory);
 
-expenseCategoryRoutes.delete('/:id', deleteExpenseCategory)
+expenseCategoryRoutes.delete('/:id', authenticateUser, deleteExpenseCategory);
 
-module.exports = expenseCategoryRoutes
+module.exports = expenseCategoryRoutes;

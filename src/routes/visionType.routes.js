@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require('express');
 
 const {
   createVisionType,
@@ -6,14 +6,14 @@ const {
   getVisionTypeById,
   updateVisionType,
   deleteVisionType,
-} = require("../controllers/visionType.controller");
+} = require('../controllers/visionType.controller');
 
 const visionTypeRoutes = express.Router();
 
-visionTypeRoutes.post("/create", createVisionType);
-visionTypeRoutes.get("/getAll", getAllVisionTypes);
-visionTypeRoutes.get("/get/:id", getVisionTypeById);
-visionTypeRoutes.put("/update/:id", updateVisionType);
-visionTypeRoutes.delete("/delete/:id", deleteVisionType);
+visionTypeRoutes.post('/create', authenticateUser, createVisionType);
+visionTypeRoutes.get('/getAll', authenticateUser, getAllVisionTypes);
+visionTypeRoutes.get('/get/:id', authenticateUser, getVisionTypeById);
+visionTypeRoutes.put('/update/:id', authenticateUser, updateVisionType);
+visionTypeRoutes.delete('/delete/:id', authenticateUser, deleteVisionType);
 
 module.exports = visionTypeRoutes;

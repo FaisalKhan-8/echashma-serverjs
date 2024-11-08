@@ -8,10 +8,10 @@ const {
 } = require('../controllers/purchase.controller');
 const PurchaseRoutes = express.Router();
 
-PurchaseRoutes.post('/', createPurchase);
-PurchaseRoutes.put('/:id', updatePurchase);
-PurchaseRoutes.get('/', getAllPurchases);
-PurchaseRoutes.get('/:id', getPurchaseById);
-PurchaseRoutes.delete('/:purchaseId', deletePurchase);
+PurchaseRoutes.post('/', authenticateUser, createPurchase);
+PurchaseRoutes.put('/:id', authenticateUser, updatePurchase);
+PurchaseRoutes.get('/', authenticateUser, getAllPurchases);
+PurchaseRoutes.get('/:id', authenticateUser, getPurchaseById);
+PurchaseRoutes.delete('/:purchaseId', authenticateUser, deletePurchase);
 
 module.exports = PurchaseRoutes;

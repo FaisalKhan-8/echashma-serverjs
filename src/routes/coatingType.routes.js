@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require('express');
 
 const {
   createCoatingType,
@@ -6,14 +6,14 @@ const {
   getCoatingTypeById,
   updateCoatingType,
   deleteCoatingType,
-} = require("../controllers/coatingType.controller");
+} = require('../controllers/coatingType.controller');
 
 const coatingTypeRoutes = express.Router();
 
-coatingTypeRoutes.post("/create", createCoatingType);
-coatingTypeRoutes.get("/getAll", getAllCoatingTypes);
-coatingTypeRoutes.get("/get/:id", getCoatingTypeById);
-coatingTypeRoutes.put("/update/:id", updateCoatingType);
-coatingTypeRoutes.delete("/delete/:id", deleteCoatingType);
+coatingTypeRoutes.post('/create', authenticateUser, createCoatingType);
+coatingTypeRoutes.get('/getAll', authenticateUser, getAllCoatingTypes);
+coatingTypeRoutes.get('/get/:id', authenticateUser, getCoatingTypeById);
+coatingTypeRoutes.put('/update/:id', authenticateUser, updateCoatingType);
+coatingTypeRoutes.delete('/delete/:id', authenticateUser, deleteCoatingType);
 
 module.exports = coatingTypeRoutes;

@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require('express');
 
 const {
   createShapeType,
@@ -6,14 +6,14 @@ const {
   getShapeTypeById,
   updateShapeType,
   deleteShapeType,
-} = require("../controllers/shapeType.controller");
+} = require('../controllers/shapeType.controller');
 
 const shapeTypeRoutes = express.Router();
 
-shapeTypeRoutes.post("/create", createShapeType);
-shapeTypeRoutes.get("/getAll", getAllShapeTypes);
-shapeTypeRoutes.get("/get/:id", getShapeTypeById);
-shapeTypeRoutes.put("/update/:id", updateShapeType);
-shapeTypeRoutes.delete("/delete/:id", deleteShapeType);
+shapeTypeRoutes.post('/create', authenticateUser, createShapeType);
+shapeTypeRoutes.get('/getAll', authenticateUser, getAllShapeTypes);
+shapeTypeRoutes.get('/get/:id', authenticateUser, getShapeTypeById);
+shapeTypeRoutes.put('/update/:id', authenticateUser, updateShapeType);
+shapeTypeRoutes.delete('/delete/:id', authenticateUser, deleteShapeType);
 
 module.exports = shapeTypeRoutes;

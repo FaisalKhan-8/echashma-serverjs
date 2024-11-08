@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require('express');
 const {
   createProduct,
   getProductById,
@@ -6,18 +6,18 @@ const {
   deleteProduct,
   getProductsByUserBranches,
   getAllProducts,
-} = require("../controllers/product.controller");
-const { getAllCompanies } = require("../controllers/companies.controller");
+} = require('../controllers/product.controller');
+const { getAllCompanies } = require('../controllers/companies.controller');
 
 const ProductRoutes = express.Router();
 
-ProductRoutes.post("/add", createProduct);
-ProductRoutes.get("/getAll", getAllProducts);
-ProductRoutes.get("/get/:id", getProductById);
-ProductRoutes.put("/update/:id", updateProduct);
-ProductRoutes.delete("/delete/:id", deleteProduct);
+ProductRoutes.post('/add', authenticateUser, createProduct);
+ProductRoutes.get('/getAll', authenticateUser, getAllProducts);
+ProductRoutes.get('/get/:id', authenticateUser, getProductById);
+ProductRoutes.put('/update/:id', authenticateUser, updateProduct);
+ProductRoutes.delete('/delete/:id', authenticateUser, deleteProduct);
 
 // New route for fetching products by user branches
-ProductRoutes.get("/user/:userId", getProductsByUserBranches);
+ProductRoutes.get('/user/:userId', authenticateUser, getProductsByUserBranches);
 
 module.exports = ProductRoutes;

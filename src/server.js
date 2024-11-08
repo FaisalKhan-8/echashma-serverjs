@@ -1,63 +1,55 @@
-const express = require('express')
-const cors = require('cors')
-const portfinder = require('portfinder')
-const dotenv = require('dotenv')
-const path = require('path')
-const rootRouter = require('./routes/index')
-const { errorHandler } = require('./middleware/errors')
-const fs = require('fs')
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const path = require('path');
+const rootRouter = require('./routes/index');
+const { errorHandler } = require('./middleware/errors');
+const fs = require('fs');
 
-dotenv.config()
+dotenv.config();
 
-const app = express()
-app.use(cors())
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // API routes
-app.use('/api', rootRouter)
+app.use('/api', rootRouter);
 
 // Set uploads directory
-const uploadsPath = path.join(process.cwd(), 'uploads')
+const uploadsPath = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsPath)) {
-  fs.mkdirSync(uploadsPath, { recursive: true })
+  fs.mkdirSync(uploadsPath, { recursive: true });
 }
 
-app.use('/uploads', express.static(uploadsPath))
+app.use('/uploads', express.static(uploadsPath));
 
 // Set the dist path
-const distPath = path.join(__dirname, 'dist')
-app.use(express.static(distPath))
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
 app.get('*', (req, res) => {
-  const indexPath = path.join(distPath, 'index.html')
-  res.sendFile(indexPath)
-})
+  const indexPath = path.join(distPath, 'index.html');
+  res.sendFile(indexPath);
+});
 
 app.get('/uploads/:fileName', (req, res) => {
-  const fileName = req.params.fileName
-  const filePath = path.join(uploadsPath, fileName)
+  const fileName = req.params.fileName;
+  const filePath = path.join(uploadsPath, fileName);
 
   // Check if the file exists and send it
   fs.access(filePath, fs.constants.F_OK, (err) => {
     if (err) {
-      return res.status(404).send('File not found')
+      return res.status(404).send('File not found');
     }
-    res.sendFile(filePath)
-  })
-})
+    res.sendFile(filePath);
+  });
+});
 
 // Error handling middleware
-app.use(errorHandler)
+app.use(errorHandler);
 
-// Start server function
-const startServer = async () => {
-  const port = await portfinder.getPortPromise({
-    port: parseInt(process.env.PORT || '8000', 10),
-  })
-
-  app.listen(port, () => {
-    console.log(`Server is running on port: http://localhost:${port}`)
-  })
-}
-
-startServer()
+// Start server
+const port = parseInt(process.env.PORT || '8000', 10);
+app.listen(port, () => {
+  console.log(`Server is running on port: http://localhost:${port}`);
+});
