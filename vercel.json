@@ -12,16 +12,16 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "server.js"
+      "src": "/src/dist/(.*)",
+      "dest": "/src/dist/$1"
     },
     {
       "src": "/uploads/(.*)",
       "dest": "/uploads/$1"
     },
     {
-      "src": "/src/dist/(.*)",
-      "dest": "/src/dist/$1"
+      "src": "/src/dist/assets/(.*)",
+      "dest": "/src/dist/assets/$1"
     },
     {
       "src": "/(.*)",
