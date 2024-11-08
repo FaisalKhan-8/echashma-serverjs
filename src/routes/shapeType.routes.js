@@ -7,6 +7,7 @@ const {
   updateShapeType,
   deleteShapeType,
 } = require('../controllers/shapeType.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const shapeTypeRoutes = express.Router();
 

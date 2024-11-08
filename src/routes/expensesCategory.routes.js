@@ -5,6 +5,7 @@ const {
   updateExpenseCategory,
   deleteExpenseCategory,
 } = require('../controllers/ExpenseCategory.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 const expenseCategoryRoutes = express.Router();
 
 expenseCategoryRoutes.post('/', authenticateUser, createExpenseCategory);

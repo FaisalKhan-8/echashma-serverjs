@@ -7,6 +7,7 @@ const {
   updateFrameType,
   deleteFrameType,
 } = require('../controllers/frameType.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const frameTypeRoutes = express.Router();
 

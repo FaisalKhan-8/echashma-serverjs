@@ -6,6 +6,7 @@ const {
   getPurchaseById,
   deletePurchase,
 } = require('../controllers/purchase.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 const PurchaseRoutes = express.Router();
 
 PurchaseRoutes.post('/', authenticateUser, createPurchase);

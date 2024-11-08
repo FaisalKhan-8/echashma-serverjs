@@ -12,6 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.resolve(__dirname, '../dist')));
 
 // API routes
 app.use('/api', rootRouter);
@@ -25,7 +26,7 @@ if (!fs.existsSync(uploadsPath)) {
 app.use('/uploads', express.static(uploadsPath));
 
 // Set the dist path
-const distPath = path.join(__dirname, 'dist');
+const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 app.get('*', (req, res) => {
   const indexPath = path.join(distPath, 'index.html');
@@ -49,12 +50,8 @@ app.get('/uploads/:fileName', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-// const port = parseInt(process.env.PORT || '8000', 10);
-// app.listen(port, () => {
-//   console.log(`Server is running on port: http://localhost:${port}`);
-// });
-
-// Export the express app as a serverless function for Vercel
-module.exports = (req, res) => {
-  app(req, res);
-};
+app.listen(process.env.PORT || 8000, () => {
+  console.log(
+    `Server is running on port: http://localhost:${process.env.PORT}`
+  );
+});

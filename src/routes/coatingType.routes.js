@@ -7,6 +7,7 @@ const {
   updateCoatingType,
   deleteCoatingType,
 } = require('../controllers/coatingType.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const coatingTypeRoutes = express.Router();
 

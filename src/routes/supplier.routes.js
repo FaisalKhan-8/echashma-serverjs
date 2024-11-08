@@ -6,6 +6,7 @@ const {
   updateSupplier,
   deleteSupplier,
 } = require('../controllers/supplier.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const supplierRoutes = express.Router();
 

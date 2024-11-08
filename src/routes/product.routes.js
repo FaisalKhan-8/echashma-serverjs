@@ -8,6 +8,7 @@ const {
   getAllProducts,
 } = require('../controllers/product.controller');
 const { getAllCompanies } = require('../controllers/companies.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const ProductRoutes = express.Router();
 

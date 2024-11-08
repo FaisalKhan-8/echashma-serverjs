@@ -7,6 +7,7 @@ const {
   updateVisionType,
   deleteVisionType,
 } = require('../controllers/visionType.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const visionTypeRoutes = express.Router();
 
