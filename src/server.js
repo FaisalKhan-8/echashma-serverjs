@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.resolve(__dirname, '../dist')));
+app.use(express.static(path.resolve(__dirname, 'dist')));
 
 // API routes
 app.use('/api', rootRouter);
@@ -26,7 +26,7 @@ if (!fs.existsSync(uploadsPath)) {
 app.use('/uploads', express.static(uploadsPath));
 
 // Set the dist path
-const distPath = path.join(__dirname, '../dist');
+const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 app.get('*', (req, res) => {
   const indexPath = path.join(distPath, 'index.html');
