@@ -9,11 +9,7 @@ const fs = require('fs');
 dotenv.config();
 
 const app = express();
-app.use(
-  cors({
-    origin: '*', // allows all origins
-  })
-);
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.resolve(__dirname, 'dist')));
