@@ -9,7 +9,11 @@ const fs = require('fs');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: '*', // allows all origins
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.resolve(__dirname, 'dist')));
@@ -50,8 +54,8 @@ app.get('/uploads/:fileName', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(process.env.PORT || 8000, () => {
+app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
   console.log(
-    `Server is running on port: http://localhost:${process.env.PORT}`
+    `Server is running on port: http://0.0.0.0:${process.env.PORT || 3000}`
   );
 });
