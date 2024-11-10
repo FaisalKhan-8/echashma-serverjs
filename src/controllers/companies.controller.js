@@ -31,13 +31,15 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    // Only allow image files
     if (!file.mimetype.startsWith('image/')) {
       return cb(new Error('Only images are allowed'), false);
     }
     cb(null, true);
   },
-});
+}).fields([
+  { name: 'pancard', maxCount: 1 },
+  { name: 'aadhaarcard', maxCount: 1 },
+]);
 
 // Create Company Controller
 const createCompany = async (req, res, next) => {
