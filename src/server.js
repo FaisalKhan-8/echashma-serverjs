@@ -9,7 +9,8 @@ const fs = require('fs');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+// app.use(cors());
+app.use(cors({ origin: 'http://13.49.177.246:3000' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.resolve(__dirname, 'dist')));
