@@ -223,15 +223,7 @@ const updateCompany = async (req, res, next) => {
       }
     }
 
-    // Get file paths for PAN card and Aadhaar card images if uploaded
-    const pancardImage = req.files?.pancard
-      ? req.files.pancard[0].filename
-      : null; // Get only the filename
-    const aadhaarcardImage = req.files?.aadhaarcard
-      ? req.files.aadhaarcard[0].filename
-      : null; // Get only the filename
-
-    // Update the company in the database
+    // Update the company in the database without updating images
     const updatedCompany = await db.company.update({
       where: { id: companyIdNumber },
       data: {
@@ -241,8 +233,7 @@ const updateCompany = async (req, res, next) => {
         phone: phone || existingCompany.phone,
         email: email || existingCompany.email,
         gst: gst || existingCompany.gst,
-        pancard: pancardImage, // Store PAN card image path if updated
-        aadhaarcard: aadhaarcardImage, // Store Aadhaar card image path if updated
+        // Do not update images
         users:
           userId && userId.length > 0
             ? { connect: userId.map((id) => ({ id })) } // Connect multiple users to the company
@@ -256,6 +247,7 @@ const updateCompany = async (req, res, next) => {
       company: updatedCompany,
     });
   } catch (error) {
+    console.error('Error:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         status: 'error',
@@ -264,7 +256,7 @@ const updateCompany = async (req, res, next) => {
       });
     }
 
-    next(error);
+    next(error); // Pass the error to your error handling middleware
   }
 };
 
