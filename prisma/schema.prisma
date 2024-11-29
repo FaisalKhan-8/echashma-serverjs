@@ -69,6 +69,7 @@ model Product {
 
   branches    Branch[]   @relation("BranchProducts")
   PurchaseItem PurchaseItem[]
+  suppliers Supplier[] 
 }
 
 
@@ -88,6 +89,7 @@ model Supplier {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
+  products  Product[]
   Purchase Purchase[]
 }
 
