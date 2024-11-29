@@ -19,6 +19,7 @@ model User {
   uuid       String    @unique @default(uuid())
   companies  Company[] @relation("UserCompanies")
   branches   Branch[]  @relation("UserBranches")
+  products  Product[]
 }
 
 model Company {
@@ -41,7 +42,7 @@ model Company {
 
 model Branch {
   id            Int      @id @default(autoincrement())
-  branchName    String
+  branchName    String   @unique
   address       String
   phone         String
   email         String?  @unique
@@ -57,28 +58,26 @@ model Branch {
 }
 
 model Product {
-  id            Int            @id @default(autoincrement())
-  code          String // Code from the Excel, like 1 for Specs, 2 for Sunglasses, etc.
-  name          String // Name of the product
-  frameTypeId   Int // Foreign key to FrameType
-  frameType     FrameType      @relation(fields: [frameTypeId], references: [id])
-  shapeTypeId   Int // Foreign key to ShapeType
-  shapeType     ShapeType      @relation(fields: [shapeTypeId], references: [id])
-  visionTypeId  Int // Foreign key to VisionType
-  visionType    VisionType     @relation(fields: [visionTypeId], references: [id])
-  coatingTypeId Int // Foreign key to CoatingType
-  coatingType   CoatingType    @relation(fields: [coatingTypeId], references: [id])
-  created_at    DateTime       @default(now())
-  updated_at    DateTime       @default(now()) @updatedAt
-  branches      Branch[]       @relation("BranchProducts") // Many-to-many relation with Branch
-  suppliers     Supplier[]     @relation("ProductSuppliers") // Many-to-many relation with Supplier
-  PurchaseItem  PurchaseItem[]
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  code        String     @unique
+  userId      Int?       // Optional userId
+  user        User?      @relation(fields: [userId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  uuid        String     @unique @default(uuid()) // Optional uuid
+
+  branches    Branch[]   @relation("BranchProducts")
+  PurchaseItem PurchaseItem[]
 }
+
+
+
 
 model Supplier {
   id            Int      @id @default(autoincrement())
-  code          String
-  name          String // Supplier name
+  code String @unique // Ensure `code` is unique
+  name String @unique // Ensure `name` is unique
   address       String // Supplier address
   contactPerson String // Contact person for the supplier
   contactNo     String // Contact number for the supplier
@@ -89,43 +88,37 @@ model Supplier {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  products Product[]  @relation("ProductSuppliers") // Many-to-many relation with Product
-
   Purchase Purchase[]
 }
 
 model FrameType {
   id       Int       @id @default(autoincrement())
-  code     String
-  name     String // Rimless, Metallic, Sheet, etc.
-  products Product[] // Relation to products
+  code String @unique // Ensure `code` is unique
+  name String @unique // Ensure `name` is unique
 }
 
 model ShapeType {
   id       Int       @id @default(autoincrement())
-  code     String
-  name     String // Round, Square, Hexagon, etc.
-  products Product[] // Relation to products
+  code String @unique // Ensure `code` is unique
+  name String @unique // Ensure `name` is unique
 }
 
 model VisionType {
   id       Int       @id @default(autoincrement())
-  code     String
-  name     String // Single Vision, Bi-Focal, Progressive, etc.
-  products Product[] // Relation to products
+  code String @unique // Ensure `code` is unique
+  name String @unique // Ensure `name` is unique
 }
 
 model CoatingType {
   id       Int       @id @default(autoincrement())
-  code     String
-  name     String
-  products Product[] // Relation to products
+  code String @unique // Ensure `code` is unique
+  name String @unique // Ensure `name` is unique
 }
 
 model Purchase {
   id           Int      @id @default(autoincrement())
   purchaseDate DateTime // Purchase date
-  billNo       String // Bill number
+  billNo       String   @unique
   supplierId   Int // Foreign key to Supplier model
   totalAmount  Float // Total purchase amount
   totalCGST    Float? // CGST amount
@@ -157,7 +150,7 @@ model PurchaseItem {
 
 model ExpenseCategory {
   id          Int      @id @default(autoincrement())
-  name        String
+  name        String   @unique
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
   expenses    Expense[] // One-to-many relationship

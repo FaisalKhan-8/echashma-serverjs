@@ -1,104 +1,92 @@
-const { z } = require("zod");
+const { z } = require('zod');
 const {
   CreateProductSchema,
   UpdateProductSchema,
-} = require("../schema/product");
-const db = require("../utils/db.config");
+} = require('../schema/product');
+const db = require('../utils/db.config');
 
 // Create a new product
 const createProduct = async (req, res) => {
-  const {
-    code,
-    name,
-    frameTypeId,
-    shapeTypeId,
-    visionTypeId,
-    coatingTypeId,
-    supplierIds,
-    branchIds,
-  } = req.body;
+  const { name, code, branchIds } = req.body;
+  const { userId } = req.user; // Assuming req.user contains the authenticated user's details
 
   try {
-    // Validate the request body against the schema
-    const parsedData = CreateProductSchema.parse({
-      code,
-      name,
-      frameType: frameTypeId, // Use frameTypeId here
-      shapeType: shapeTypeId, // Use shapeTypeId here
-      visionType: visionTypeId, // Use visionTypeId here
-      coatingType: coatingTypeId, // Use coatingTypeId here
-      branchIds,
-      supplierIds, // Include supplierIds for validation
+    // Check if a product with the same name or code already exists
+    const existingProduct = await db.product.findFirst({
+      where: {
+        OR: [{ name }, { code }],
+      },
     });
 
-    // Proceed with product creation using parsedData
+    if (existingProduct) {
+      return res.status(400).json({
+        error: 'Product with this name or code already exists',
+      });
+    }
+
+    // Ensure branchIds are integers
+    const branchIdsInt = branchIds.map((id) => parseInt(id, 10));
+
+    // Validate the branchIds (ensure they exist and belong to the user)
+    const branches = await db.branch.findMany({
+      where: {
+        id: { in: branchIdsInt }, // Ensure the provided branch IDs exist
+        users: { some: { id: userId } }, // Ensure the branch is associated with the authenticated user
+      },
+    });
+
+    // If any branch ID does not exist or does not belong to the user, return an error
+    if (branches.length !== branchIdsInt.length) {
+      return res.status(400).json({
+        error:
+          'One or more branch IDs are invalid or do not belong to the user',
+      });
+    }
+
+    // Create the new product and associate it with the provided branches
     const newProduct = await db.product.create({
       data: {
-        code: parsedData.code,
-        name: parsedData.name,
-        frameTypeId: parsedData.frameType,
-        shapeTypeId: parsedData.shapeType,
-        visionTypeId: parsedData.visionType,
-        coatingTypeId: parsedData.coatingType,
-        suppliers: {
-          connect: parsedData.supplierIds
-            ? [{ id: parseInt(parsedData.supplierIds, 10) }]
-            : [], // Connect existing suppliers
-        },
+        name,
+        code,
+        userId, // Associate product with the authenticated user
         branches: {
-          connect:
-            parsedData.branchIds?.map((id) => ({ id: parseInt(id, 10) })) || [], // Connect existing branches
+          connect: branchIdsInt.map((branchId) => ({ id: branchId })),
         },
-      },
-      include: {
-        frameType: true,
-        shapeType: true,
-        visionType: true,
-        coatingType: true,
-        suppliers: true, // Include suppliers in the response
-        branches: true, // Include branches in the response
       },
     });
 
     res.status(201).json(newProduct);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      // Handle Zod validation errors
-      return res.status(400).json({ errors: error.errors });
-    }
     console.error(error);
-    res.status(500).json({ error: "Unable to create product" });
+    res.status(500).json({ error: 'Unable to create product' });
   }
 };
 
 // Get all products with pagination, search, and associated branches
 const getAllProducts = async (req, res) => {
-  const { page = 1, limit = 10, search = "" } = req.query; // Get query parameters
+  const { userId } = req.user; // Get userId from authenticated user
+  const { page = 1, limit = 10, search = '' } = req.query;
   const pageNumber = parseInt(page);
   const pageLimit = parseInt(limit);
 
   try {
     const products = await db.product.findMany({
       where: {
+        userId, // Only fetch products created by this user
         name: {
-          contains: search, // Search for products by name
+          contains: search, // Search by product name
         },
       },
-      skip: (pageNumber - 1) * pageLimit, // Skip to the right page
-      take: pageLimit, // Limit the number of results
+      skip: (pageNumber - 1) * pageLimit,
+      take: pageLimit,
       include: {
-        frameType: true,
-        shapeType: true,
-        visionType: true,
-        coatingType: true,
-        suppliers: true, // Include suppliers in the response
-        branches: true, // Include branches in the response
+        branches: true, // Include associated branches
       },
     });
 
-    // Count total products for pagination
     const totalProducts = await db.product.count({
       where: {
+        userId, // Count only the user's products
         name: {
           contains: search,
         },
@@ -106,119 +94,104 @@ const getAllProducts = async (req, res) => {
     });
 
     res.status(200).json({
-      totalProducts, // Total number of products matching search criteria
-      totalPages: Math.ceil(totalProducts / pageLimit), // Total pages
-      currentPage: pageNumber, // Current page
-      products, // Current page products
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / pageLimit),
+      currentPage: pageNumber,
+      products,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Unable to retrieve products" });
+    res.status(500).json({ error: 'Unable to retrieve products' });
   }
 };
 
 // Get a single product by ID, including all associated details
 const getProductById = async (req, res) => {
   const { id } = req.params;
+  const { userId } = req.user; // Get userId from authenticated user
 
   try {
     const product = await db.product.findUnique({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId }, // Ensure product belongs to the user
       include: {
-        frameType: true,
-        shapeType: true,
-        visionType: true,
-        coatingType: true,
-        suppliers: true,
-        branches: true, // Include branches in the response
+        branches: true, // Include associated branches
       },
     });
+
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      return res
+        .status(404)
+        .json({ error: 'Product not found or not owned by user' });
     }
+
     res.status(200).json(product);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Unable to retrieve product" });
+    res.status(500).json({ error: 'Unable to retrieve product' });
   }
 };
 
 // Update a product by ID, including associations with suppliers and branches
 const updateProduct = async (req, res) => {
   const { id } = req.params;
+  const { name, code } = req.body;
+  const { userId } = req.user; // Get userId from authenticated user
 
   try {
-    // Validate request body against the schema
-    const validatedData = UpdateProductSchema.parse(req.body);
+    // Check if a product with the same name or code already exists
+    const existingProduct = await db.product.findFirst({
+      where: {
+        OR: [{ name }, { code }],
+        NOT: { id: Number(id) }, // Ensure the product being updated is not included in the check
+      },
+    });
 
-    const {
-      code,
-      name,
-      frameType,
-      shapeType,
-      visionType,
-      coatingType,
-      supplierIds,
-      branchIds,
-    } = validatedData;
+    if (existingProduct) {
+      return res.status(400).json({
+        error: 'Product with this name or code already exists',
+      });
+    }
 
-    // Create a data object for the update, adding properties only if they exist
-    const data = {
-      ...(code && { code }), // Only add code if it exists
-      ...(name && { name }), // Only add name if it exists
-      ...(frameType !== undefined && { frameTypeId: parseInt(frameType, 10) }), // Only add if provided
-      ...(shapeType !== undefined && { shapeTypeId: parseInt(shapeType, 10) }), // Only add if provided
-      ...(visionType !== undefined && {
-        visionTypeId: parseInt(visionType, 10),
-      }), // Only add if provided
-      ...(coatingType !== undefined && {
-        coatingTypeId: parseInt(coatingType, 10),
-      }), // Only add if provided
-      ...(supplierIds && {
-        suppliers: { set: supplierIds.map((id) => ({ id: parseInt(id, 10) })) },
-      }), // Only add if supplierIds exist
-      ...(branchIds && {
-        branches: { set: branchIds.map((id) => ({ id: parseInt(id, 10) })) },
-      }), // Only add if branchIds exist
-    };
-
+    // Update the product, ensuring it belongs to the authenticated user
     const updatedProduct = await db.product.update({
-      where: { id: Number(id) },
-      data,
-      include: {
-        frameType: true,
-        shapeType: true,
-        visionType: true,
-        coatingType: true,
-        suppliers: true,
-        branches: true,
+      where: { id: Number(id), userId }, // Ensure product belongs to the user
+      data: {
+        name,
+        code,
       },
     });
 
     res.status(200).json(updatedProduct);
   } catch (error) {
-    // Handle Zod validation errors
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ errors: error.errors }); // Return validation errors
-    }
-
     console.error(error);
-    res.status(500).json({ error: "Unable to update product" });
+    res.status(500).json({ error: 'Unable to update product' });
   }
 };
 
 // Delete a product by ID, removing associations with suppliers and branches
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
+  const { userId } = req.user; // Get userId from authenticated user
 
   try {
-    await db.product.delete({
-      where: { id: Number(id) },
+    const product = await db.product.findUnique({
+      where: { id: Number(id), userId }, // Ensure product belongs to the user
     });
-    res.status(204).send();
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ error: 'Product not found or not owned by user' });
+    }
+
+    await db.product.delete({
+      where: { id: Number(id), userId },
+    });
+
+    res.status(204).send(); // No content, successfully deleted
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Unable to delete product" });
+    res.status(500).json({ error: 'Unable to delete product' });
   }
 };
 
@@ -226,22 +199,15 @@ const getProductsByUserBranches = async (
   userId,
   page = 1,
   pageSize = 10,
-  searchTerm = ""
+  searchTerm = ''
 ) => {
   try {
-    // Find the user and include only the branches and their products
     const userWithBranches = await db.user.findUnique({
       where: { id: userId },
       include: {
         branches: {
           include: {
             products: {
-              include: {
-                frameType: true,
-                shapeType: true,
-                visionType: true,
-                coatingType: true,
-              },
               where: {
                 name: {
                   contains: searchTerm, // Search for products by name
@@ -253,14 +219,22 @@ const getProductsByUserBranches = async (
       },
     });
 
-    // Extract products from the branches and flatten the array
-    const products = userWithBranches
-      ? userWithBranches.branches.flatMap((branch) => branch.products)
-      : [];
+    if (!userWithBranches) {
+      throw new Error('User not found');
+    }
 
-    // Implement pagination
-    const totalProducts = products.length;
-    const paginatedProducts = products.slice(
+    // Flatten the products from all branches
+    const allProducts = userWithBranches.branches.flatMap(
+      (branch) => branch.products
+    );
+
+    // Filter products if necessary
+    const filteredProducts = allProducts.filter((product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const totalProducts = filteredProducts.length;
+    const paginatedProducts = filteredProducts.slice(
       (page - 1) * pageSize,
       page * pageSize
     );
@@ -272,7 +246,7 @@ const getProductsByUserBranches = async (
       currentPage: page,
     };
   } catch (error) {
-    console.error("Error fetching products for user branches:", error);
+    console.error('Error fetching products for user branches:', error);
     throw error;
   }
 };
