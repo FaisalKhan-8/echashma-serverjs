@@ -1,10 +1,10 @@
-const { AppError } = require("../errors/AppError.js");
+const { AppError } = require('../errors/AppError.js');
 const {
   CreateBranchSchema,
   UpdateBranchSchema,
-} = require("../schema/branch.js");
-const db = require("../utils/db.config.js");
-const { z } = require("zod");
+} = require('../schema/branch.js');
+const db = require('../utils/db.config.js');
+const { z } = require('zod');
 
 const createBranch = async (req, res, next) => {
   try {
@@ -28,7 +28,7 @@ const createBranch = async (req, res, next) => {
       });
 
       if (!existingCompany) {
-        throw new AppError("Company not found!", 404);
+        throw new AppError('Company not found!', 404);
       }
 
       // Check if the branch already exists for this company
@@ -41,7 +41,7 @@ const createBranch = async (req, res, next) => {
 
       if (existingBranch) {
         throw new AppError(
-          "Branch with this name already exists in this company!",
+          'Branch with this name already exists in this company!',
           409
         );
       }
@@ -61,7 +61,7 @@ const createBranch = async (req, res, next) => {
 
       // Check if all userIds are found in the existing users
       if (existingUsers.length !== userIdsAsIntegers.length) {
-        throw new AppError("One or more users not found!", 404);
+        throw new AppError('One or more users not found!', 404);
       }
     }
 
@@ -90,20 +90,20 @@ const createBranch = async (req, res, next) => {
       },
     });
 
-    console.log("New Branch:", newBranch);
+    console.log('New Branch:', newBranch);
 
     // Return a successful response
     res.status(201).json({
-      message: "Branch created successfully!",
+      message: 'Branch created successfully!',
       branch: newBranch,
     });
   } catch (error) {
-    console.error("Error in createBranch:", error); // Log the error
+    console.error('Error in createBranch:', error); // Log the error
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        status: "error",
-        message: "Validation failed",
+        status: 'error',
+        message: 'Validation failed',
         errors: error.errors,
       });
     }
@@ -114,10 +114,13 @@ const createBranch = async (req, res, next) => {
 
 const getBranches = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const { userId } = req.user;
+    const { role } = req.user;
+
+    console.log(userId, role);
 
     // Get pagination and search parameters from the query
-    const { page = 1, limit = 10, searchTerm = "" } = req.query;
+    const { page = 1, limit = 10, searchTerm = '' } = req.query;
 
     // Convert page and limit to numbers
     const pageNum = parseInt(page, 10);
@@ -126,76 +129,110 @@ const getBranches = async (req, res, next) => {
     // Calculate the offset for pagination
     const offset = (pageNum - 1) * limitNum;
 
-    // Check if the user is an admin
-    if (req.user.role === "ADMIN") {
-      // If the user is an admin, return all branches with pagination and search
-      const allBranches = await db.branch.findMany({
-        where: {
-          branchName: {
-            contains: searchTerm, // Search for branches by name
-          },
-        },
-        skip: offset,
-        take: limitNum,
-      });
+    let branches, totalBranches;
 
-      // Count total branches for pagination info
-      const totalBranches = await db.branch.count({
-        where: {
-          branchName: {
-            contains: searchTerm, // Search for branches by name
-          },
-        },
-      });
-
-      return res.status(200).json({
-        message: "All branches retrieved successfully!",
-        branches: allBranches,
-        total: totalBranches,
-        page: pageNum,
-        limit: limitNum,
-      });
-    } else {
-      // If the user is not an admin, return only the branches assigned to the user
-      const userBranches = await db.branch.findMany({
-        where: {
-          users: {
-            some: {
-              id: userId, // Ensure userId is defined
+    // Role-based logic using switch case
+    switch (role) {
+      case 'ADMIN':
+        // Admin: See all branches
+        branches = await db.branch.findMany({
+          where: {
+            branchName: {
+              contains: searchTerm, // Search for branches by name
             },
           },
-          branchName: {
-            contains: searchTerm, // Search for branches by name
-          },
-        },
-        skip: offset,
-        take: limitNum,
-      });
+          skip: offset,
+          take: limitNum,
+        });
 
-      // Count total branches assigned to the user for pagination info
-      const totalUserBranches = await db.branch.count({
-        where: {
-          users: {
-            some: {
-              id: userId,
+        totalBranches = await db.branch.count({
+          where: {
+            branchName: {
+              contains: searchTerm, // Search for branches by name
             },
           },
-          branchName: {
-            contains: searchTerm, // Search for branches by name
-          },
-        },
-      });
+        });
+        break;
 
-      return res.status(200).json({
-        message: "User-specific branches retrieved successfully!",
-        branches: userBranches,
-        total: totalUserBranches,
-        page: pageNum,
-        limit: limitNum,
-      });
+      case 'SUBADMIN':
+        // Subadmin: See only branches assigned to them
+        branches = await db.branch.findMany({
+          where: {
+            users: {
+              some: {
+                id: userId, // Only branches assigned to this subadmin
+              },
+            },
+            branchName: {
+              contains: searchTerm, // Search filter
+            },
+          },
+          skip: offset,
+          take: limitNum,
+        });
+
+        totalBranches = await db.branch.count({
+          where: {
+            users: {
+              some: {
+                id: userId,
+              },
+            },
+            branchName: {
+              contains: searchTerm,
+            },
+          },
+        });
+        break;
+
+      case 'MANAGER':
+        // Manager: See only branches assigned to them
+        branches = await db.branch.findMany({
+          where: {
+            managers: {
+              some: {
+                id: userId, // Only branches assigned to this manager
+              },
+            },
+            branchName: {
+              contains: searchTerm, // Search filter
+            },
+          },
+          skip: offset,
+          take: limitNum,
+        });
+
+        totalBranches = await db.branch.count({
+          where: {
+            managers: {
+              some: {
+                id: { in: userId },
+              },
+            },
+            branchName: {
+              contains: searchTerm,
+            },
+          },
+        });
+        break;
+
+      default:
+        // Unauthorized role
+        return res.status(403).json({
+          error: 'Unauthorized role for accessing branches.',
+        });
     }
+
+    // Respond with the retrieved branches and pagination data
+    return res.status(200).json({
+      message: `${role} branches retrieved successfully!`,
+      branches,
+      total: totalBranches,
+      page: pageNum,
+      limit: limitNum,
+    });
   } catch (error) {
-    console.error("Error in getBranches:", error);
+    console.error('Error in getBranches:', error);
     next(error); // Pass the error to the error handling middleware
   }
 };
@@ -203,17 +240,17 @@ const getBranches = async (req, res, next) => {
 const updateBranch = async (req, res, next) => {
   try {
     const branchId = parseInt(req.params.id);
-    console.log("Updating branch ID:", branchId);
+    console.log('Updating branch ID:', branchId);
 
     const parsedBody = UpdateBranchSchema.parse(req.body);
-    console.log("Parsed body for update:", parsedBody);
+    console.log('Parsed body for update:', parsedBody);
 
     const existingBranch = await db.branch.findUnique({
       where: { id: branchId },
     });
 
     if (!existingBranch) {
-      throw new AppError("Branch not found!", 404);
+      throw new AppError('Branch not found!', 404);
     }
 
     const updatedBranch = await db.branch.update({
@@ -226,19 +263,19 @@ const updateBranch = async (req, res, next) => {
       },
     });
 
-    console.log("Updated Branch:", updatedBranch);
+    console.log('Updated Branch:', updatedBranch);
 
     res.status(200).json({
-      message: "Branch updated successfully!",
+      message: 'Branch updated successfully!',
       branch: updatedBranch,
     });
   } catch (error) {
-    console.error("Error in updateBranch:", error);
+    console.error('Error in updateBranch:', error);
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        status: "error",
-        message: "Validation failed",
+        status: 'error',
+        message: 'Validation failed',
         errors: error.errors,
       });
     }
@@ -258,7 +295,7 @@ const deleteBranch = async (req, res, next) => {
     });
 
     if (!existingBranch) {
-      throw new AppError("Branch not found!", 404);
+      throw new AppError('Branch not found!', 404);
     }
 
     // Delete the branch from the database
@@ -267,10 +304,10 @@ const deleteBranch = async (req, res, next) => {
     });
 
     res.status(204).json({
-      message: "Branch deleted successfully!",
+      message: 'Branch deleted successfully!',
     });
   } catch (error) {
-    console.error("Error in deleteBranch:", error);
+    console.error('Error in deleteBranch:', error);
     next(error);
   }
 };

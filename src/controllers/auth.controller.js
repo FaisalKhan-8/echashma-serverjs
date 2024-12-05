@@ -17,7 +17,17 @@ const CreateUser = async (req, res, next) => {
     // Validate request body using Zod schema
     CreateUserSchema.parse(req.body);
 
-    const { email, password, name, avatar, role, companyId = [] } = req.body;
+    const { email, password, name, avatar, role, companyId } = req.body;
+
+    const userRole = req.user.role;
+
+    // Check if the user has permission to create a user
+    if (userRole !== 'ADMIN' && userRole !== 'SUBADMIN') {
+      throw new AppError(
+        'Unauthorized: Only ADMIN and SUBADMIN can create users',
+        403
+      );
+    }
 
     // Check if the user already exists
     const existingUser = await db.user.findUnique({
@@ -28,23 +38,34 @@ const CreateUser = async (req, res, next) => {
       throw new AppError('User already exists!', 400);
     }
 
+    if (companyId) {
+      const companyExists = await db.company.findUnique({
+        where: { id: companyId },
+      });
+
+      if (!companyExists) {
+        throw new AppError('Invalid company ID', 404);
+      }
+    }
+
     // Hash the password
     const hashedPassword = hashSync(password, 10);
 
-    // Create the new user with optional company assignment
+    // Create the user
     const newUser = await db.user.create({
       data: {
         email,
         password: hashedPassword,
+        password_visible: password,
         name,
-        avatar,
-        role: role || Roles.SUBADMIN,
-        companies: {
-          connect: companyId.map((id) => ({ id: parseInt(id, 10) })), // Wrap ID in an object
-        },
+        avatar:
+          avatar ||
+          'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg',
+        role: role || 'MANAGER', // Default to MANAGER if no role is provided
+        companyId: companyId || null, // Assign the user to a specific company
       },
       include: {
-        companies: true, // Include company details in the response
+        company: true, // Corrected from 'companies' to 'company'
       },
     });
 
@@ -77,9 +98,11 @@ const Login = async (req, res, next) => {
     let user = await db.user.findFirst({
       where: { email },
       include: {
-        companies: true, // Include company details in the response
+        company: true, // Include company details in the response
       },
     });
+
+    console.log(user);
 
     if (!user) {
       return next(new AppError('User does not exist!', 404));
@@ -94,6 +117,7 @@ const Login = async (req, res, next) => {
       {
         userId: user.id,
         role: user.role,
+        companyId: user.companyId,
       },
 
       process.env.JWT_SECRET
@@ -114,39 +138,94 @@ const Login = async (req, res, next) => {
 };
 
 const GetAllUser = async (req, res, next) => {
-  const { search = '', page = 1, limit = 10 } = req.query;
-  const skip = (page - 1) * limit;
-
   try {
-    const users = await db.user.findMany({
-      where: {
-        OR: [
-          {
-            name: {
-              contains: search.toLowerCase(),
-            },
-          },
-          {
-            email: {
-              contains: search.toLowerCase(),
-            },
-          },
-        ],
-      },
-      include: {
-        companies: true,
-      },
-      skip,
-      take: parseInt(limit),
-    });
+    const { userId, role, companyId } = req.user;
+    const { page = 1, limit = 10, searchTerm = '' } = req.query;
 
-    res.json({
-      status: 'success',
+    console.log(req.user);
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    let users, totalUsers;
+    const searchConditions = searchTerm
+      ? {
+          OR: [
+            { name: { contains: searchTerm } },
+            { email: { contains: searchTerm } },
+          ],
+        }
+      : {};
+
+    switch (role) {
+      case 'ADMIN':
+        // Admin: Can see all users and include company details
+        users = await db.user.findMany({
+          where: {
+            companyId: companyId, // Admin can see users in their company
+            ...searchConditions,
+          },
+          skip: offset,
+          take: limitNum,
+          include: {
+            company: true, // Include company details for users
+          },
+        });
+
+        totalUsers = await db.user.count({
+          where: {
+            companyId: companyId,
+            ...searchConditions,
+          },
+        });
+        break;
+
+      case 'SUBADMIN':
+        // SUBADMIN: Can see users in their company
+        users = await db.user.findMany({
+          where: {
+            companyId: companyId, // Filter users by companyId
+            ...searchConditions,
+          },
+          skip: offset,
+          take: limitNum,
+          include: {
+            company: true, // Include company details for users
+          },
+        });
+
+        totalUsers = await db.user.count({
+          where: {
+            companyId: companyId, // Count users in their company
+            ...searchConditions,
+          },
+        });
+        break;
+
+      case 'MANAGER':
+        // Manager: Not allowed to view users
+        return res.status(403).json({
+          error: 'You do not have permission to view users.',
+        });
+
+      default:
+        // Unauthorized role
+        return res.status(403).json({
+          error: 'Unauthorized role for accessing users.',
+        });
+    }
+
+    return res.status(200).json({
+      message: `${role} users retrieved successfully!`,
       users,
+      total: totalUsers,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    next(new AppError('Failed to fetch users', 500));
+    console.error('Error in getUsers:', error);
+    next(error);
   }
 };
 
@@ -158,7 +237,7 @@ const GetLoggedInUser = async (req, res, next) => {
     const user = await db.user.findUnique({
       where: { id: userId },
       include: {
-        companies: true,
+        company: true,
         branches: true,
         // Include company details if needed
       },
@@ -287,14 +366,20 @@ const DeleteUser = async (req, res, next) => {
 
 const GetRecentUsers = async (req, res, next) => {
   try {
+    const { role, companyId } = req.user;
+
+    // Admin: Fetch all users, Subadmin: Fetch only users from their own company
+    const whereCondition = role === 'ADMIN' ? {} : { companyId: companyId };
+
     // Fetch the last 5 users created, sorted by creation date (descending)
     const recentUsers = await db.user.findMany({
+      where: whereCondition, // Use the appropriate condition based on the role
       orderBy: {
-        created_at: 'desc', // Use the correct column name here
+        created_at: 'desc', // Sort by creation date in descending order
       },
       take: 5,
       include: {
-        companies: true,
+        company: true,
         branches: true, // Include company and branch details if needed
       },
     });

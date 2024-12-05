@@ -1,10 +1,10 @@
 const express = require('express');
 const {
-  createPurchase,
   updatePurchase,
   getAllPurchases,
   getPurchaseById,
   deletePurchase,
+  createPurchase,
 } = require('../controllers/purchase.controller');
 const authenticateUser = require('../middleware/authenticateUser');
 const PurchaseRoutes = express.Router();

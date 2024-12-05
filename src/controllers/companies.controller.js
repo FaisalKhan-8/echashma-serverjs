@@ -137,26 +137,52 @@ async function getAllCompanies(req, res, next) {
   const { page = 1, pageSize = 10, searchTerm = '' } = req.query;
   const pageSizeNumber = parseInt(pageSize, 10) || 10;
   const pageNumber = parseInt(page, 10) || 1;
+  const userId = req.user.id;
+  const userRole = req.user.role;
 
   try {
-    // Get the total count of companies matching the search term
-    const totalRecords = await db.company.count({
-      where: {
-        companyName: {
-          contains: searchTerm,
-        },
+    let whereCondition = {
+      companyName: {
+        contains: searchTerm,
       },
+    };
+
+    switch (userRole) {
+      case 'ADMIN':
+        break;
+      case 'SUBADMIN':
+        whereCondition = {
+          ...whereCondition,
+          users: {
+            some: {
+              id: userId,
+            },
+          },
+        };
+        break;
+      case 'MANAGER':
+        whereCondition = {
+          ...whereCondition,
+          users: {
+            some: {
+              role: 'SUBADMIN',
+              managerId: userId,
+            },
+          },
+        };
+        break;
+      default:
+        throw new Error('Invalid user role');
+    }
+
+    const totalRecords = await db.company.count({
+      where: whereCondition,
     });
 
-    // Now, retrieve the companies with pagination
     const companies = await db.company.findMany({
-      where: {
-        companyName: {
-          contains: searchTerm,
-        },
-      },
+      where: whereCondition,
       include: {
-        users: true, // Ensure 'users' is a valid relation
+        users: true,
       },
       skip: (pageNumber - 1) * pageSizeNumber,
       take: pageSizeNumber,

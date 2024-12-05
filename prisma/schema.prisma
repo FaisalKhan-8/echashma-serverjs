@@ -3,23 +3,26 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id         Int       @id @default(autoincrement())
-  name       String?
-  email      String    @unique
-  password   String
-  avatar     String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
-  role       String    @default("SUBADMIN") // Changed to String for roles
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  uuid       String    @unique @default(uuid())
-  companies  Company[] @relation("UserCompanies")
-  branches   Branch[]  @relation("UserBranches")
-  products  Product[]
+  id               Int        @id @default(autoincrement())
+  name             String?
+  email            String     @unique
+  password         String
+  password_visible String
+  avatar           String?    @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
+  role             String     @default("MANAGER") // Default role for users
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @default(now()) @updatedAt
+  uuid             String     @unique @default(uuid())
+  companyId        Int? // Foreign key to reference Company
+  company          Company?   @relation(fields: [companyId], references: [id]) // Relation to the Company model
+  branches         Branch[]   @relation("UserBranches")
+  products         Product[]
+  purchases        Purchase[]
 }
 
 model Company {
@@ -36,8 +39,8 @@ model Company {
   updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
-  users    User[]   @relation("UserCompanies")
   branches Branch[] @relation("CompanyBranches") // Relationship to Branch model
+  users    User[] // This is the plural form indicating one company can have many users
 }
 
 model Branch {
@@ -51,34 +54,33 @@ model Branch {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  company   Company   @relation("CompanyBranches", fields: [companyId], references: [id])
+  company   Company    @relation("CompanyBranches", fields: [companyId], references: [id])
   companyId Int // Foreign key to Company
-  users     User[]    @relation("UserBranches") // Many-to-many relation with User
-  products  Product[] @relation("BranchProducts") // Many-to-many relation with Product
+  users     User[]     @relation("UserBranches") // Many-to-many relation with User
+  products  Product[]  @relation("BranchProducts")
+  purchases Purchase[]
 }
 
 model Product {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  code        String     @unique
-  userId      Int?       // Optional userId
-  user        User?      @relation(fields: [userId], references: [id])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  uuid        String     @unique @default(uuid()) // Optional uuid
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  code      String   @unique
+  userId    Int? // Optional userId
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  uuid      String   @unique @default(uuid()) // Optional uuid
 
-  branches    Branch[]   @relation("BranchProducts")
-  PurchaseItem PurchaseItem[]
-  suppliers Supplier[] 
+  branches        Branch[]          @relation("BranchProducts")
+  PurchaseItem    PurchaseItem[]
+  suppliers       Supplier[]
+  CustomerInvoice CustomerInvoice[]
 }
-
-
-
 
 model Supplier {
   id            Int      @id @default(autoincrement())
-  code String @unique // Ensure `code` is unique
-  name String @unique // Ensure `name` is unique
+  code          String   @unique // Ensure `code` is unique
+  name          String   @unique // Ensure `name` is unique
   address       String // Supplier address
   contactPerson String // Contact person for the supplier
   contactNo     String // Contact number for the supplier
@@ -89,32 +91,41 @@ model Supplier {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  products  Product[]
+  products Product[]
   Purchase Purchase[]
 }
 
 model FrameType {
-  id       Int       @id @default(autoincrement())
-  code String @unique // Ensure `code` is unique
-  name String @unique // Ensure `name` is unique
+  id              Int               @id @default(autoincrement())
+  code            String            @unique // Ensure `code` is unique
+  name            String            @unique // Ensure `name` is unique
+  CustomerInvoice CustomerInvoice[]
 }
 
 model ShapeType {
-  id       Int       @id @default(autoincrement())
-  code String @unique // Ensure `code` is unique
-  name String @unique // Ensure `name` is unique
+  id              Int               @id @default(autoincrement())
+  code            String            @unique // Ensure `code` is unique
+  name            String            @unique // Ensure `name` is unique
+  CustomerInvoice CustomerInvoice[]
 }
 
 model VisionType {
-  id       Int       @id @default(autoincrement())
+  id   Int    @id @default(autoincrement())
   code String @unique // Ensure `code` is unique
   name String @unique // Ensure `name` is unique
 }
 
 model CoatingType {
-  id       Int       @id @default(autoincrement())
+  id   Int    @id @default(autoincrement())
   code String @unique // Ensure `code` is unique
   name String @unique // Ensure `name` is unique
+}
+
+model Brands {
+  id              Int               @id @default(autoincrement())
+  code            String            @unique // Ensure `code` is unique
+  name            String            @unique // Ensure `name` is unique  
+  CustomerInvoice CustomerInvoice[]
 }
 
 model Purchase {
@@ -132,8 +143,13 @@ model Purchase {
 
   createdAt DateTime @default(now()) // Creation timestamp
   updatedAt DateTime @updatedAt // Update timestamp
+  User      User?    @relation(fields: [userId], references: [id])
+  userId    Int?
+  Branch    Branch?  @relation(fields: [branchId], references: [id])
+  branchId  Int?
 }
 
+//  TODO:need to change add frameType and all add fields to the purchase items
 model PurchaseItem {
   id         Int    @id @default(autoincrement())
   purchaseId Int // Foreign key to Purchase
@@ -143,27 +159,85 @@ model PurchaseItem {
   amount     Float // Total amount for the product (rate * quantity)
   cgst       Float? // CGST for the product
   sgst       Float? // SGST for the product
-  discount   Float?  @default(0)
+  discount   Float? @default(0)
 
   purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
   Product  Product  @relation(fields: [productId], references: [id])
 }
 
-
 model ExpenseCategory {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
-  expenses    Expense[] // One-to-many relationship
+  id         Int       @id @default(autoincrement())
+  name       String    @unique
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+  expenses   Expense[] // One-to-many relationship
 }
 
 model Expense {
-  id              Int      @id @default(autoincrement())
-  amount          Float
-  description     String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  categoryId      Int      // Foreign key reference
-  category        ExpenseCategory @relation(fields: [categoryId], references: [id]) // Establishing the relationship
+  id          Int             @id @default(autoincrement())
+  amount      Float
+  description String
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+  categoryId  Int // Foreign key reference
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id]) // Establishing the relationship
+}
+
+model CustomerInvoice {
+  id            Int      @id @default(autoincrement())
+  billNo        String   @unique
+  customerName  String
+  customerPhone String
+  DOB           DateTime
+  DOM           DateTime
+  address       String
+  email         String
+  LRC           String
+  orderNo       String
+  lensType      String
+  rightSPH      Float
+  leftSPH       Float
+  rightCYL      Float
+  leftCYL       Float
+  rightAXIS     Float
+  leftAXIS      Float
+  rightADD      Float
+  leftADD       Float
+
+  // Product details directly in CustomerInvoice
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  frameTypeId Int
+  frameType   FrameType @relation(fields: [frameTypeId], references: [id])
+
+  brandId Int
+  brand   Brands @relation(fields: [brandId], references: [id])
+
+  shapeId Int
+  shape   ShapeType @relation(fields: [shapeId], references: [id])
+
+  rate     Float
+  quantity Int
+  discount Float
+  amount   Float
+
+  totalAmount Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Prescription {
+  id        Int      @id @default(autoincrement())
+  rightSPH  Float
+  rightCYL  Float
+  rightAXIS Float
+  rightADD  Float
+  leftSPH   Float
+  leftCYL   Float
+  leftAXIS  Float
+  leftADD   Float
+  lensType  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

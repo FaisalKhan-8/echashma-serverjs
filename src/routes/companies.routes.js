@@ -7,6 +7,7 @@ const {
   updateCompany,
   deleteCompany,
 } = require('../controllers/companies.controller');
+const authenticateUser = require('../middleware/authenticateUser');
 
 const companyRoutes = Router();
 
@@ -16,7 +17,7 @@ companyRoutes.post(
   authorizeAdmin,
   createCompany
 );
-companyRoutes.get('/getAllCompany', authorizeAdmin, getAllCompanies);
+companyRoutes.get('/getAllCompany', authenticateUser, getAllCompanies);
 companyRoutes.put(
   '/updateCompany',
   upload, // Use upload middleware here

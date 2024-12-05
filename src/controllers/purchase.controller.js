@@ -1,3 +1,4 @@
+const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 
 const calculatePriceDetails = (rate, quantity, discount = 0) => {
@@ -21,21 +22,63 @@ const calculatePriceDetails = (rate, quantity, discount = 0) => {
 };
 
 // Create a new purchase with GST and discount calculations
-exports.createPurchase = async (req, res) => {
+exports.createPurchase = async (req, res, next) => {
+  const { purchaseDate, billNo, supplierId, items } = req.body;
+  const { userId } = req.user;
+
+  console.log('Request Body:', req.body);
+
   try {
-    const { purchaseDate, billNo, supplierId, items } = req.body;
+    // Retrieve the branches associated with the user from req.user
+    const userBranches = req.user.branches;
+
+    if (!userBranches || userBranches.length === 0) {
+      return new AppError(
+        'User does not have any branches associated with them. Please assign branches to your user.',
+        403
+      );
+    }
+
+    // Assuming you want to use the first branch associated with the user
+    const branch = userBranches[0]; // Adjust this logic if a user has multiple branches and needs a specific one
+
+    const branchId = branch.id;
+    console.log('Branch ID:', branchId);
 
     // Validate required fields
     if (
       !purchaseDate ||
       !billNo ||
       !supplierId ||
+      !branchId ||
       !items ||
       items.length === 0
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Invalid input data' });
+      return res.status(400).json({
+        error: 'Invalid input data. Please provide all required fields.',
+      });
+    }
+
+    // Continue with purchase creation using the branchId
+    const existingPurchase = await db.purchase.findFirst({
+      where: { billNo, branchId },
+    });
+
+    if (existingPurchase) {
+      return res.status(400).json({
+        error: 'Purchase with this Bill No already exists for this branch',
+      });
+    }
+
+    const supplier = await db.supplier.findFirst({
+      where: { id: supplierId, branchId },
+    });
+
+    if (!supplier) {
+      return res.status(400).json({
+        error:
+          'Invalid supplier ID or supplier is not associated with the specified branch',
+      });
     }
 
     let totalAmount = 0;
@@ -43,68 +86,78 @@ exports.createPurchase = async (req, res) => {
     let totalSGST = 0;
     let netTotal = 0;
 
-    // Calculate totals for each item
-    const purchaseItemsData = items.map((item) => {
-      const { quantity, rate, discount = 0 } = item;
+    const purchaseItemsData = await Promise.all(
+      items.map(async (item) => {
+        const { productId, quantity, rate, discount = 0 } = item;
 
-      // Calculate total item amount, CGST, and SGST
-      const totalItemAmount = rate * quantity;
-      const discountAmount = totalItemAmount * (discount / 100);
-      const amountAfterDiscount = totalItemAmount - discountAmount;
+        const product = await db.product.findFirst({
+          where: { id: productId, branchId },
+        });
 
-      // Assume CGST and SGST are 9% each for example
-      const cgst = amountAfterDiscount * 0.09;
-      const sgst = amountAfterDiscount * 0.09;
-      const totalWithGST = amountAfterDiscount + cgst + sgst;
+        if (!product) {
+          throw new Error(
+            `Invalid product ID: ${productId} or product is not associated with the specified branch`
+          );
+        }
 
-      // Update totals
-      totalAmount += totalItemAmount;
-      totalCGST += cgst;
-      totalSGST += sgst;
-      netTotal += totalWithGST;
+        const totalItemAmount = rate * quantity;
+        const discountAmount = totalItemAmount * (discount / 100);
+        const amountAfterDiscount = totalItemAmount - discountAmount;
+        const cgst = amountAfterDiscount * 0.09;
+        const sgst = amountAfterDiscount * 0.09;
+        const totalWithGST = amountAfterDiscount + cgst + sgst;
 
-      return {
-        productId: item.productId,
-        quantity,
-        rate,
-        discount, // Include discount here
-        amount: amountAfterDiscount, // Store the amount after discount
-        cgst,
-        sgst,
-      };
-    });
+        totalAmount += totalItemAmount;
+        totalCGST += cgst;
+        totalSGST += sgst;
+        netTotal += totalWithGST;
 
-    const roundOff = Math.round(netTotal) - netTotal; // Round-off calculation
+        return {
+          productId,
+          quantity,
+          rate,
+          discount,
+          amount: amountAfterDiscount,
+          cgst,
+          sgst,
+        };
+      })
+    );
 
-    // Create the purchase record in the database
-    const purchase = await db.purchase.create({
+    const roundOff = Math.round(netTotal) - netTotal;
+
+    const newPurchase = await db.purchase.create({
       data: {
+        userId,
+        branchId,
         purchaseDate: new Date(purchaseDate),
         billNo,
         supplierId,
         totalAmount,
         totalCGST,
         totalSGST,
-        netTotal: netTotal + roundOff, // Store the rounded total
+        netTotal: netTotal + roundOff,
         items: {
           create: purchaseItemsData.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
             rate: item.rate,
-            discount: item.discount, // Save the discount
+            discount: item.discount,
             amount: item.amount,
             cgst: item.cgst,
             sgst: item.sgst,
           })),
         },
       },
-      include: { items: true }, // Include items in the response
+      include: { items: true },
     });
 
-    res.status(201).json({ success: true, data: purchase });
+    res.status(201).json({ success: true, data: newPurchase });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    next(new Error(error));
+    res
+      .status(500)
+      .json({ error: error.message || 'Unable to create purchase' });
   }
 };
 
@@ -187,21 +240,23 @@ exports.updatePurchase = async (req, res) => {
 
 // Get all purchases
 exports.getAllPurchases = async (req, res) => {
-  const { page = 1, limit = 10, search = '' } = req.query; // Extract page, limit, and search from query parameters
+  const { userId } = req.user; // Get userId from the authenticated user
+  const { page = 1, limit = 10, search = '' } = req.query;
 
-  const skip = (page - 1) * limit; // Calculate how many records to skip
-  const take = parseInt(limit); // Limit of records per page
+  const pageNumber = parseInt(page);
+  const pageLimit = parseInt(limit);
+  const skip = (pageNumber - 1) * pageLimit;
 
   try {
-    // Perform search query with descending order
+    // Fetch purchases with pagination and search
     const purchases = await db.purchase.findMany({
-      skip, // <-- Add skip here
-      take, // <-- Add take here
       where: {
+        userId, // Filter purchases for the authenticated user
         OR: [
           {
             billNo: {
-              contains: search, // Search by invoice number
+              contains: search, // Search by bill number
+              mode: 'insensitive', // Case-insensitive search
             },
           },
           {
@@ -210,51 +265,54 @@ exports.getAllPurchases = async (req, res) => {
                 Product: {
                   name: {
                     contains: search, // Search by product name
+                    mode: 'insensitive',
                   },
                 },
               },
             },
           },
           {
-            items: {
-              some: {
-                Product: {
-                  suppliers: {
-                    some: {
-                      name: {
-                        contains: search, // Search by supplier name
-                      },
-                    },
-                  },
-                },
+            Branch: {
+              branchName: {
+                contains: search, // Search by branch name
+                mode: 'insensitive',
               },
             },
           },
         ],
       },
+      skip, // Skip records for pagination
+      take: pageLimit, // Limit the number of records returned
       include: {
+        Branch: true, // Include branch details
         items: {
           include: {
-            Product: {
-              include: {
-                suppliers: true, // Include the suppliers for each product
-              },
-            },
+            Product: true, // Include product details for each item
           },
+        },
+        supplier: true, // Include supplier details
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }, // Include limited user details
         },
       },
       orderBy: {
-        createdAt: 'desc', // Sort by createdAt in descending order to get the most recent purchases first
+        createdAt: 'desc', // Order purchases by most recent
       },
     });
 
-    // Get total count for pagination purposes
+    // Count total purchases for pagination
     const totalPurchases = await db.purchase.count({
       where: {
+        userId, // Count only the user's purchases
         OR: [
           {
             billNo: {
-              contains: search, // Add condition for invoice number in total count
+              contains: search, // Count matching by bill number
+              mode: 'insensitive',
             },
           },
           {
@@ -262,24 +320,18 @@ exports.getAllPurchases = async (req, res) => {
               some: {
                 Product: {
                   name: {
-                    contains: search,
+                    contains: search, // Count matching by product name
+                    mode: 'insensitive',
                   },
                 },
               },
             },
           },
           {
-            items: {
-              some: {
-                Product: {
-                  suppliers: {
-                    some: {
-                      name: {
-                        contains: search,
-                      },
-                    },
-                  },
-                },
+            Branch: {
+              branchName: {
+                contains: search, // Count matching by branch name
+                mode: 'insensitive',
               },
             },
           },
@@ -288,18 +340,14 @@ exports.getAllPurchases = async (req, res) => {
     });
 
     res.status(200).json({
-      success: true,
-      data: purchases,
-      pagination: {
-        total: totalPurchases,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(totalPurchases / limit),
-      },
+      totalPurchases,
+      totalPages: Math.ceil(totalPurchases / pageLimit),
+      currentPage: pageNumber,
+      purchases,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('Error fetching purchases:', error);
+    res.status(500).json({ error: 'Unable to retrieve purchases' });
   }
 };
 

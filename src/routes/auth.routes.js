@@ -13,12 +13,12 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 const authRoutes = Router();
 
-authRoutes.post('/createUser', authorizeAdmin, CreateUser);
+authRoutes.post('/createUser', authenticateUser, CreateUser);
 authRoutes.post('/login', Login);
-authRoutes.get('/getAllUser', authorizeAdmin, GetAllUser);
+authRoutes.get('/getAllUser', authenticateUser, GetAllUser);
 authRoutes.get('/profile', authenticateUser, GetLoggedInUser);
-authRoutes.get('/recent-users', authorizeAdmin, GetRecentUsers);
-authRoutes.put('/update/:id', authorizeAdmin, UpdateUser);
-authRoutes.delete('/delete/:id', authorizeAdmin, DeleteUser);
+authRoutes.get('/recent-users', authenticateUser, GetRecentUsers);
+authRoutes.put('/update/:id', authenticateUser, UpdateUser);
+authRoutes.delete('/delete/:id', authenticateUser, DeleteUser);
 
 module.exports = authRoutes;
