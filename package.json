@@ -19,6 +19,7 @@
     "pkg": "^5.7.0",
     "portfinder": "^1.0.32",
     "prisma": "^5.22.0",
+    "uuid": "^11.0.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -1,91 +1,122 @@
 const db = require('../utils/db.config.js');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const {
-  CreateUserSchema,
-  LoginUserSchema,
-  UpdateUserSchema,
-} = require('../schema/user.js');
+const { LoginUserSchema, UpdateUserSchema } = require('../schema/user.js');
 const { AppError } = require('../errors/AppError.js');
 const { z } = require('zod');
-const { Roles } = require('../schema/roles.enum.js');
+const upload = require('../middleware/upload.js');
 
 const { hashSync, compare } = bcrypt;
 
+//TODO: user and company only take one email also for name
 const CreateUser = async (req, res, next) => {
-  try {
-    // Validate request body using Zod schema
-    CreateUserSchema.parse(req.body);
+  const prisma = db; // Assume `db` is your Prisma client instance
 
-    const { email, password, name, avatar, role, companyId } = req.body;
+  // Destructure necessary fields from request
+  const { email, password, name, avatar, role, companyDetails } = req.body;
+  const userRole = req.user.role; // Role of the logged-in user
+  const userCompanyId = req.user.companyId; // For Subadmin, their assigned company ID
 
-    const userRole = req.user.role;
-
-    // Check if the user has permission to create a user
-    if (userRole !== 'ADMIN' && userRole !== 'SUBADMIN') {
-      throw new AppError(
-        'Unauthorized: Only ADMIN and SUBADMIN can create users',
-        403
-      );
-    }
-
-    // Check if the user already exists
-    const existingUser = await db.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new AppError('User already exists!', 400);
-    }
-
-    if (companyId) {
-      const companyExists = await db.company.findUnique({
-        where: { id: companyId },
-      });
-
-      if (!companyExists) {
-        throw new AppError('Invalid company ID', 404);
-      }
-    }
-
-    // Hash the password
-    const hashedPassword = hashSync(password, 10);
-
-    // Create the user
-    const newUser = await db.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        password_visible: password,
-        name,
-        avatar:
-          avatar ||
-          'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg',
-        role: role || 'MANAGER', // Default to MANAGER if no role is provided
-        companyId: companyId || null, // Assign the user to a specific company
-      },
-      include: {
-        company: true, // Corrected from 'companies' to 'company'
-      },
-    });
-
-    // Respond with success message and user data
-    res.status(201).json({
-      message: 'User created successfully!',
-      user: newUser,
-    });
-  } catch (error) {
-    // Handle Zod validation errors
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: error.errors,
-      });
-    }
-
-    next(error);
+  // Validate required fields manually
+  if (!email || !password || !name) {
+    return next(
+      new AppError('Missing required fields: email, password, or name', 400)
+    );
   }
+
+  // Handle file uploads for pancard and aadhaarcard with transition
+  upload(req, res, async (err) => {
+    if (err) return next(new AppError(err.message, 400)); // Handle upload errors
+
+    try {
+      let companyId = null;
+      let pancardPath = null;
+      let aadhaarcardPath = null;
+
+      // Create company if admin is creating a new company
+      if (companyDetails && userRole === 'ADMIN') {
+        const existingCompany = await prisma.company.findUnique({
+          where: { companyName: companyDetails.companyName },
+        });
+
+        if (existingCompany) {
+          return next(new AppError('Company already exists!', 400));
+        }
+
+        // Extract file paths from uploaded files for pancard and aadhaarcard
+        pancardPath = req.files?.pancard ? req.files.pancard[0].path : null;
+        aadhaarcardPath = req.files?.aadhaarcard
+          ? req.files.aadhaarcard[0].path
+          : null;
+
+        const newCompany = await prisma.company.create({
+          data: {
+            ...companyDetails,
+            pancard: pancardPath,
+            aadhaarcard: aadhaarcardPath,
+          },
+        });
+
+        companyId = newCompany.id;
+      } else if (userRole === 'SUBADMIN') {
+        if (!userCompanyId) {
+          return next(
+            new AppError(
+              'Unauthorized: SUBADMIN must be assigned to a company',
+              403
+            )
+          );
+        }
+
+        companyId = userCompanyId;
+
+        if (role !== 'MANAGER') {
+          return next(
+            new AppError(
+              'Unauthorized: SUBADMIN can only create MANAGER roles',
+              403
+            )
+          );
+        }
+      }
+
+      // Check if the user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        return next(new AppError('User already exists!', 400));
+      }
+
+      // Hash the password
+      const hashedPassword = hashSync(password, 10);
+
+      // Create the user
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          password_visible: password,
+          name,
+          avatar:
+            avatar ||
+            'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg',
+          role: role || 'MANAGER', // Default to MANAGER
+          companyId: companyId || null,
+        },
+      });
+
+      // Respond with success message
+      res.status(201).json({
+        message: 'User and company created successfully!',
+        user: newUser,
+        companyId,
+      });
+    } catch (error) {
+      next(error); // Pass any other errors to the error-handling middleware
+    }
+  });
 };
 
 const Login = async (req, res, next) => {
@@ -393,6 +424,47 @@ const GetRecentUsers = async (req, res, next) => {
   }
 };
 
+const CreateFirstAdmin = async (req, res, next) => {
+  try {
+    const { email, password, name } = req.body;
+
+    // Check if an Admin already exists
+    const existingAdmin = await db.user.findFirst({
+      where: { role: 'ADMIN' },
+    });
+
+    if (existingAdmin) {
+      throw new AppError(
+        'Admin already exists. Use an existing Admin to create new users.',
+        400
+      );
+    }
+
+    // Hash the password
+    const hashedPassword = hashSync(password, 10);
+
+    // Create the first Admin
+    const firstAdmin = await db.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        password_visible: password, // Optional: consider removing in production
+        name: name || 'Admin User',
+        role: 'ADMIN',
+        avatar:
+          'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg', // Default avatar
+      },
+    });
+
+    res.status(201).json({
+      message: 'First Admin created successfully!',
+      user: firstAdmin,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   CreateUser,
   Login,
@@ -401,4 +473,5 @@ module.exports = {
   UpdateUser,
   DeleteUser,
   GetRecentUsers,
+  CreateFirstAdmin,
 };
