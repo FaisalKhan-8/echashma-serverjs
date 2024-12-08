@@ -158,19 +158,24 @@ const Login = async (req, res, next) => {
     LoginUserSchema.parse(req.body);
     const { email, password } = req.body;
 
-    // Check if the user exists and the password is correct
+    // Fetch user from the database without company details first
     let user = await db.user.findFirst({
       where: { email },
-      include: {
-        // Include company details only for non-Admin roles
-        company: req.body.role !== 'ADMIN' ? true : false,
-      },
+      include: {},
     });
-
-    console.log(user);
 
     if (!user) {
       return next(new AppError('User does not exist!', 404));
+    }
+
+    // If user is not Admin, include company details
+    if (user.role !== 'ADMIN') {
+      user = await db.user.findFirst({
+        where: { email },
+        include: {
+          company: true,
+        },
+      });
     }
 
     // Check if password is valid
@@ -184,7 +189,7 @@ const Login = async (req, res, next) => {
       {
         userId: user.id,
         role: user.role,
-        companyId: user.companyId || null,
+        companyId: user.companyId,
       },
       process.env.JWT_SECRET
     );
@@ -202,14 +207,12 @@ const Login = async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      // If Zod validation fails, respond with validation errors
       return res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: error.errors,
       });
     }
-    // General error handler
     next(error);
   }
 };
