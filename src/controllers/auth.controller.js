@@ -158,11 +158,12 @@ const Login = async (req, res, next) => {
     LoginUserSchema.parse(req.body);
     const { email, password } = req.body;
 
-    // Check if the user exists and fetch associated company if necessary
+    // Check if the user exists and the password is correct
     let user = await db.user.findFirst({
       where: { email },
       include: {
-        company: true, // Include company details for non-admin users
+        // Include company details only for non-Admin roles
+        company: req.body.role !== 'ADMIN' ? true : false,
       },
     });
 
@@ -172,28 +173,33 @@ const Login = async (req, res, next) => {
       return next(new AppError('User does not exist!', 404));
     }
 
-    // Check if the password is valid
+    // Check if password is valid
     const isPasswordValid = await compare(password, user.password);
     if (!isPasswordValid) {
       return next(new AppError('Invalid credentials!', 401));
     }
 
-    // If the user is not an admin, ensure they are associated with a company
-    if (user.role !== 'ADMIN' && !user.companyId) {
-      return next(new AppError('User is not associated with a company!', 403));
-    }
-
-    // Generate a JWT token
+    // Create JWT token
     const token = jwt.sign(
       {
         userId: user.id,
         role: user.role,
-        companyId: user.companyId || null, // Company ID can be null for admins
+        companyId: user.companyId || null,
       },
       process.env.JWT_SECRET
     );
 
-    res.status(200).json({ status: 'success', user, token });
+    // Send response with user details and JWT token
+    res.status(200).json({
+      status: 'success',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        company: user.company, // This will be included only if not Admin
+      },
+      token,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       // If Zod validation fails, respond with validation errors
@@ -203,6 +209,7 @@ const Login = async (req, res, next) => {
         errors: error.errors,
       });
     }
+    // General error handler
     next(error);
   }
 };
