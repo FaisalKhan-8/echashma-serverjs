@@ -158,11 +158,11 @@ const Login = async (req, res, next) => {
     LoginUserSchema.parse(req.body);
     const { email, password } = req.body;
 
-    // Check if the user exists and fetch associated company if necessary
+    // Check if the user exists and the password is correct
     let user = await db.user.findFirst({
       where: { email },
       include: {
-        company: true, // Include company details for non-admin users
+        company: true, // Include company details in the response
       },
     });
 
@@ -172,24 +172,18 @@ const Login = async (req, res, next) => {
       return next(new AppError('User does not exist!', 404));
     }
 
-    // Check if the password is valid
     const isPasswordValid = await compare(password, user.password);
     if (!isPasswordValid) {
       return next(new AppError('Invalid credentials!', 401));
     }
 
-    // If the user is not an admin, ensure they are associated with a company
-    if (user.role !== 'ADMIN' && !user.companyId) {
-      return next(new AppError('User is not associated with a company!', 403));
-    }
-
-    // Generate a JWT token
     const token = jwt.sign(
       {
         userId: user.id,
         role: user.role,
-        companyId: user.companyId || null, // Company ID can be null for admins
+        companyId: user.companyId,
       },
+
       process.env.JWT_SECRET
     );
 
