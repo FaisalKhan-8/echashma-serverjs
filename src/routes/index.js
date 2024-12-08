@@ -13,6 +13,7 @@ const PurchaseRoutes = require('./purchase.routes');
 const expenseCategoryRoutes = require('./expensesCategory.routes');
 const customerInvoiceRoutes = require('./customerInvoice.routes');
 const prescriptionRoutes = require('./prescription.routes');
+const BrandRoutes = require('./brand.routes');
 
 const rootRouter = Router();
 
@@ -30,5 +31,6 @@ rootRouter.use('/expences', expensesRoutes);
 rootRouter.use('/expence-category', expenseCategoryRoutes);
 rootRouter.use('/customer-invoices', customerInvoiceRoutes);
 rootRouter.use('/prescriptions', prescriptionRoutes);
+rootRouter.use('/brand', BrandRoutes);
 
 module.exports = rootRouter;

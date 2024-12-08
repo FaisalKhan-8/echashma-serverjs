@@ -237,7 +237,7 @@ model Prescription {
   leftCYL   Float
   leftAXIS  Float
   leftADD   Float
-  lensType  String
+  lensType  String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

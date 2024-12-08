@@ -13,36 +13,87 @@ async function createCustomerInvoice(req, res, next) {
       address,
       email,
       LRC,
+      orderNo,
+      lensType,
+      rightSPH,
+      leftSPH,
+      rightCYL,
+      leftCYL,
+      rightAXIS,
+      leftAXIS,
+      rightADD,
+      leftADD,
+      productId,
+      frameTypeId,
+      brandId,
+      shapeId,
+      rate,
+      quantity,
+      discount,
+      amount,
+      totalAmount,
     } = req.body;
 
-    // Validate required fields if needed
-    if (!invoiceDate || !invoiceNo || !customerName || !customerPhone) {
-      return next(new AppError('Missing required fields', 400)); // Return bad request error
+    // Validate required fields
+    if (
+      !invoiceDate ||
+      !invoiceNo ||
+      !customerName ||
+      !customerPhone ||
+      !productId ||
+      !frameTypeId ||
+      !brandId ||
+      !shapeId ||
+      !rate ||
+      !quantity ||
+      !amount ||
+      !totalAmount
+    ) {
+      return next(new AppError('Missing required fields', 400));
     }
 
-    // Create the invoice in the database
+    // Create a new invoice
     const newInvoice = await db.customerInvoice.create({
       data: {
         invoiceDate: new Date(invoiceDate),
         invoiceNo,
         customerName,
         customerPhone,
-        DOB,
-        DOM,
+        DOB: DOB ? new Date(DOB) : null,
+        DOM: DOM ? new Date(DOM) : null,
         address,
         email,
         LRC,
+        orderNo,
+        lensType,
+        rightSPH,
+        leftSPH,
+        rightCYL,
+        leftCYL,
+        rightAXIS,
+        leftAXIS,
+        rightADD,
+        leftADD,
+        productId,
+        frameTypeId,
+        brandId,
+        shapeId,
+        rate,
+        quantity,
+        discount: discount || 0, // Default to 0 if not provided
+        amount,
+        totalAmount,
       },
     });
 
-    // Send the created invoice in the response
+    // Send the created invoice as a response
     return res.status(201).json({
       status: 'success',
-      message: 'Invoice created successfully',
+      message: 'Customer invoice created successfully',
       invoice: newInvoice,
     });
   } catch (error) {
-    // Pass the error to the next middleware (error handler)
+    // Handle errors gracefully
     return next(new AppError(error.message, 500));
   }
 }

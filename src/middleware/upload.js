@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { AppError } = require('../errors/AppError');
 
 // Ensure the uploads directory exists
 const uploadDir = path.join(process.cwd(), 'uploads');
@@ -41,7 +42,9 @@ const upload = multer({
   },
 }).fields([
   { name: 'pancard', maxCount: 1 },
-  { name: 'aadhaarcard', maxCount: 1 },
+  { name: 'adharcard', maxCount: 1 },
 ]);
+
+// Error handler for multer-specific errors
 
 module.exports = upload;
