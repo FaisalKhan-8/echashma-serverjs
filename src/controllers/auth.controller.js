@@ -10,41 +10,68 @@ const { hashSync, compare } = bcrypt;
 
 //TODO: user and company only take one email also for name
 const CreateUser = async (req, res, next) => {
-  console.log('Request body:', req.body);
-
-  const { email, password, name, avatar, role, companyDetails } = req.body;
-  const userRole = req.user.role; // Role of the logged-in user
-  const userCompanyId = req.user.companyId; // For SUBADMIN, their assigned company ID
-
-  // Validate required fields manually
-  if (!password) {
-    return next(
-      new AppError('Missing required fields: password is mandatory', 400)
-    );
-  }
-
-  // Extract file paths for pancard and aadhaarcard
-  let pancardPath = null;
-  let aadhaarcardPath = null;
-
-  if (req.files) {
-    pancardPath = req.files?.pancard ? req.files.pancard[0].path : null;
-    aadhaarcardPath = req.files?.aadhaarcard
-      ? req.files.aadhaarcard[0].path
-      : null;
-  }
-
-  let companyId = null;
-  let finalEmail = email; // Default to the user-provided email
-  let finalName = name || req.body.contactPerson; // Use the contact person name if provided
-
   try {
+    console.log('Request body:', req.body); // In production, consider using a logger
+
+    const {
+      email,
+      password,
+      phone,
+      companyName,
+      contactPerson,
+      address,
+      gst,
+      role,
+    } = req.body;
+
+    const userRole = req.user.role; // Role of the logged-in user
+    const userCompanyId = req.user.companyId; // For SUBADMIN, their assigned company ID
+
+    // Validate required fields manually
+    if (!password) {
+      return next(
+        new AppError('Missing required fields: password is mandatory', 400)
+      );
+    }
+
+    if (!phone) {
+      return next(
+        new AppError('Missing required fields: phone is mandatory', 400)
+      );
+    }
+
+    // Validate phone format (example: basic phone validation for 10-digit numbers)
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(phone)) {
+      return next(
+        new AppError(
+          'Invalid phone number format. It should be 10 digits.',
+          400
+        )
+      );
+    }
+
+    // Extract file paths for pancard and aadhaarcard
+    let pancardPath = null;
+    let aadhaarcardPath = null;
+
+    if (req.files) {
+      pancardPath = req.files?.pancard ? req.files.pancard[0].path : null;
+      aadhaarcardPath = req.files?.adharcard
+        ? req.files.adharcard[0].path
+        : null;
+    }
+
+    let companyId = null;
+    let finalEmail = email; // Default to the user-provided email
+    let finalName = contactPerson; // Use the contact person name if provided
+
     // Start a transaction
     const result = await db.$transaction(async (prisma) => {
-      // If companyDetails is provided and the user is ADMIN, create the company first
-      if (companyDetails && userRole === 'ADMIN') {
+      // Handle company creation first, only if user has the "ADMIN" role
+      if (companyName && userRole === 'ADMIN') {
         // Ensure that companyName is provided
-        if (!companyDetails.companyName) {
+        if (!companyName) {
           throw new AppError(
             'Company name is required to create a company!',
             400
@@ -53,34 +80,31 @@ const CreateUser = async (req, res, next) => {
 
         // Ensure that the company doesn't already exist
         const existingCompany = await prisma.company.findUnique({
-          where: { companyName: companyDetails.companyName },
+          where: { companyName },
         });
 
         if (existingCompany) {
           throw new AppError('Company already exists!', 400);
         }
 
-        // Create a new company in the database
+        // Create the company
         const newCompany = await prisma.company.create({
           data: {
-            companyName: companyDetails.companyName,
-            address: companyDetails.address || null,
-            contactPerson: companyDetails.contactPerson || null,
-            phone: companyDetails.phone || null,
-            email: companyDetails.email || email, // Use company email if provided, otherwise use user email
-            gst: companyDetails.gst || null,
+            companyName,
+            address: address || null,
+            contactPerson: contactPerson || null,
+            phone: phone || null,
+            email: email || finalEmail, // Use company email if provided, otherwise use user email
+            gst: gst || null,
             pancard: pancardPath,
             aadhaarcard: aadhaarcardPath,
           },
         });
 
-        // Store the company ID
-        companyId = newCompany.id;
         console.log('Company created:', newCompany);
 
-        // Update final email and name if company details include them
-        finalEmail = companyDetails.email || email;
-        finalName = companyDetails.contactPerson || name;
+        // Set the companyId to be assigned to the user later
+        companyId = newCompany.id;
       } else if (userRole === 'SUBADMIN') {
         // Ensure SUBADMIN can only create users for their assigned company
         if (!userCompanyId) {
@@ -101,7 +125,7 @@ const CreateUser = async (req, res, next) => {
         }
       }
 
-      // Check if the user already exists with the provided email
+      // Now create the user after company creation
       const existingUser = await prisma.user.findUnique({
         where: { email: finalEmail },
       });
@@ -113,30 +137,26 @@ const CreateUser = async (req, res, next) => {
       // Hash the password
       const hashedPassword = hashSync(password, 10);
 
-      // Create the user in the database
+      // Create the user
       const newUser = await prisma.user.create({
         data: {
           email: finalEmail, // Use the final email
           password: hashedPassword,
           password_visible: password,
-          name: finalName, // Use final name
-          avatar:
-            avatar ||
-            'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg', // Default avatar if not provided
+          name: finalName || req.body.contactPerson, // Use final name (contact person or default)
           role: role || 'MANAGER', // Default to "MANAGER" if role is not specified
-          companyId: companyId, // Ensure companyId is properly linked
+          companyId: companyId, // Assign company ID to the user
         },
       });
 
       console.log('New User created:', newUser);
 
-      // Return the created user and companyId for response
       return { user: newUser, companyId };
     });
 
     // If everything is successful, send the response
     res.status(201).json({
-      message: 'User and company created successfully!',
+      message: 'User created successfully!',
       user: result.user,
       companyId: result.companyId,
     });
@@ -219,8 +239,8 @@ const Login = async (req, res, next) => {
 
 const GetAllUser = async (req, res, next) => {
   try {
-    const { userId, role, companyId } = req.user;
-    const { page = 1, limit = 10, searchTerm = '' } = req.query;
+    const { userId, role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
+    const { page = 1, limit = 10, searchTerm = '' } = req.query; // Pagination and search parameters
 
     console.log(req.user);
 
@@ -243,7 +263,7 @@ const GetAllUser = async (req, res, next) => {
         // Admin: Can see all users and include company details
         users = await db.user.findMany({
           where: {
-            companyId: companyId, // Admin can see users in their company
+            // Admin can see users in their company
             ...searchConditions,
           },
           skip: offset,
@@ -255,7 +275,6 @@ const GetAllUser = async (req, res, next) => {
 
         totalUsers = await db.user.count({
           where: {
-            companyId: companyId,
             ...searchConditions,
           },
         });

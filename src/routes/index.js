@@ -29,7 +29,7 @@ rootRouter.use('/coating', coatingTypeRoutes);
 rootRouter.use('/purchase', PurchaseRoutes);
 rootRouter.use('/expences', expensesRoutes);
 rootRouter.use('/expence-category', expenseCategoryRoutes);
-rootRouter.use('/customer-invoices', customerInvoiceRoutes);
+rootRouter.use('/customer-invoice', customerInvoiceRoutes);
 rootRouter.use('/prescriptions', prescriptionRoutes);
 rootRouter.use('/brand', BrandRoutes);
 

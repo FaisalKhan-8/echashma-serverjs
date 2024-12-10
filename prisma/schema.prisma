@@ -184,47 +184,46 @@ model Expense {
 }
 
 model CustomerInvoice {
-  id            Int      @id @default(autoincrement())
-  billNo        String   @unique
-  customerName  String
-  customerPhone String
-  DOB           DateTime
-  DOM           DateTime
-  address       String
-  email         String
-  LRC           String
-  orderNo       String
-  lensType      String
-  rightSPH      Float
-  leftSPH       Float
-  rightCYL      Float
-  leftCYL       Float
-  rightAXIS     Float
-  leftAXIS      Float
-  rightADD      Float
-  leftADD       Float
+  id               Int      @id @default(autoincrement())
+  customerName     String
+  customerPhone    String
+  customerLocation String
+  orderNo          String   @unique
+  orderDate        DateTime
+  testedBy         String?
+  grandTotal       Float
+  advance          Float
+  discount         Float    @default(0)
+  balance          Float
 
-  // Product details directly in CustomerInvoice
-  productId Int
-  product   Product @relation(fields: [productId], references: [id])
+  // Eye prescription fields
+  prescription Json // Store the prescription as a JSON object for flexibility
 
-  frameTypeId Int
-  frameType   FrameType @relation(fields: [frameTypeId], references: [id])
+  // Product details
+  products Json // Store an array of products with fields like name, price, quantity, etc.
 
-  brandId Int
-  brand   Brands @relation(fields: [brandId], references: [id])
+  // Relations for optional fields (e.g., brands, frame types, shape types)
+  brandId Int?
+  brand   Brands? @relation(fields: [brandId], references: [id])
 
-  shapeId Int
-  shape   ShapeType @relation(fields: [shapeId], references: [id])
+  frameTypeId Int?
+  frameType   FrameType? @relation(fields: [frameTypeId], references: [id])
 
-  rate     Float
-  quantity Int
-  discount Float
-  amount   Float
+  shapeId Int?
+  shape   ShapeType? @relation(fields: [shapeId], references: [id])
 
-  totalAmount Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Common invoice calculations
+  rate           Float?
+  quantity       Int?
+  discountAmount Float  @default(0)
+  amount         Float
+  totalAmount    Float
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Product   Product? @relation(fields: [productId], references: [id])
+  productId Int?
 }
 
 model Prescription {

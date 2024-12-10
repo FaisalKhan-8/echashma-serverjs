@@ -38,12 +38,21 @@ const upload = multer({
   },
 }).fields([
   { name: 'pancard', maxCount: 1 },
-  { name: 'aadhaarcard', maxCount: 1 },
+  { name: 'adharcard', maxCount: 1 },
 ]);
 
 // Create Company Controller
 const createCompany = async (req, res, next) => {
   try {
+    // Check if the logged-in user has permission to create a company
+    const userRole = req.user.role;
+    if (userRole === 'SUBADMIN' || userRole === 'MANAGER') {
+      throw new AppError(
+        'You do not have permission to create a company!',
+        403
+      );
+    }
+
     // Validate request body
     const parsedBody = CreateCompanySchema.parse(req.body);
 
@@ -70,8 +79,8 @@ const createCompany = async (req, res, next) => {
     const pancardImage = req.files?.pancard
       ? req.files.pancard[0].filename
       : null; // Get only the filename
-    const aadhaarcardImage = req.files?.aadhaarcard
-      ? req.files.aadhaarcard[0].filename
+    const aadhaarcardImage = req.files?.adharcard
+      ? req.files.adharcard[0].filename
       : null; // Get only the filename
 
     // Check if the GST number is already in use
@@ -94,6 +103,23 @@ const createCompany = async (req, res, next) => {
       });
       if (existingEmail) {
         throw new AppError('Email already in use by another company!', 400);
+      }
+    }
+
+    // Check that SUBADMINs are assigned to only one company
+    if (userId.length) {
+      const subadmins = await db.user.findMany({
+        where: {
+          id: { in: userId },
+          role: 'SUBADMIN',
+        },
+      });
+
+      // Validate that no SUBADMIN is already assigned to a company
+      for (let subadmin of subadmins) {
+        if (subadmin.companyId) {
+          throw new AppError('SUBADMIN is already assigned to a company!', 400);
+        }
       }
     }
 

@@ -1,104 +1,191 @@
 const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config'); // Assuming you have a DB config
 
-async function createCustomerInvoice(req, res, next) {
+// async function createCustomerInvoice(req, res, next) {
+//   try {
+//     const {
+//       invoiceDate,
+//       invoiceNo,
+//       customerName,
+//       customerPhone,
+//       DOB,
+//       DOM,
+//       address,
+//       email,
+//       LRC,
+//       orderNo,
+//       lensType,
+//       rightSPH,
+//       leftSPH,
+//       rightCYL,
+//       leftCYL,
+//       rightAXIS,
+//       leftAXIS,
+//       rightADD,
+//       leftADD,
+//       productId,
+//       frameTypeId,
+//       brandId,
+//       shapeId,
+//       rate,
+//       quantity,
+//       discount,
+//       amount,
+//       totalAmount,
+//     } = req.body;
+
+//     // Validate required fields
+//     if (
+//       !invoiceDate ||
+//       !invoiceNo ||
+//       !customerName ||
+//       !customerPhone ||
+//       !productId ||
+//       !frameTypeId ||
+//       !brandId ||
+//       !shapeId ||
+//       !rate ||
+//       !quantity ||
+//       !amount ||
+//       !totalAmount
+//     ) {
+//       return next(new AppError('Missing required fields', 400));
+//     }
+
+//     console.log(req.body);
+
+//     return;
+
+//     // Create a new invoice
+//     const newInvoice = await db.customerInvoice.create({
+//       data: {
+//         invoiceDate: new Date(invoiceDate),
+//         invoiceNo,
+//         customerName,
+//         customerPhone,
+//         DOB: DOB ? new Date(DOB) : null,
+//         DOM: DOM ? new Date(DOM) : null,
+//         address,
+//         email,
+//         LRC,
+//         orderNo,
+//         lensType,
+//         rightSPH,
+//         leftSPH,
+//         rightCYL,
+//         leftCYL,
+//         rightAXIS,
+//         leftAXIS,
+//         rightADD,
+//         leftADD,
+//         productId,
+//         frameTypeId,
+//         brandId,
+//         shapeId,
+//         rate,
+//         quantity,
+//         discount: discount || 0, // Default to 0 if not provided
+//         amount,
+//         totalAmount,
+//       },
+//     });
+
+//     // Send the created invoice as a response
+//     return res.status(201).json({
+//       status: 'success',
+//       message: 'Customer invoice created successfully',
+//       invoice: newInvoice,
+//     });
+//   } catch (error) {
+//     // Handle errors gracefully
+//     return next(new AppError(error.message, 500));
+//   }
+// }
+
+// Get all invoices
+
+// async function createCustomerInvoice(data) {
+//   try {
+//     console.log('Received data:', data);
+
+//     // Validate if rightEye and leftEye are provided
+//     // if (!data.rightEye || !data.leftEye) {
+//     //   throw new Error('Both rightEye and leftEye details must be provided');
+//     // }
+
+//     // Continue with invoice creation...
+//   } catch (error) {
+//     console.error('Error creating invoice:', error);
+//     throw error;
+//   }
+// }
+async function createCustomerInvoice(req, res) {
   try {
     const {
-      invoiceDate,
-      invoiceNo,
       customerName,
       customerPhone,
-      DOB,
-      DOM,
-      address,
-      email,
-      LRC,
+      customerLocation,
       orderNo,
-      lensType,
-      rightSPH,
-      leftSPH,
-      rightCYL,
-      leftCYL,
-      rightAXIS,
-      leftAXIS,
-      rightADD,
-      leftADD,
-      productId,
-      frameTypeId,
+      orderDate,
+      testedBy,
+      grandTotal,
+      advance,
+      discount,
+      balance,
+      prescription,
+      products,
       brandId,
+      frameTypeId,
       shapeId,
       rate,
       quantity,
-      discount,
+      discountAmount,
       amount,
       totalAmount,
     } = req.body;
 
-    // Validate required fields
-    if (
-      !invoiceDate ||
-      !invoiceNo ||
-      !customerName ||
-      !customerPhone ||
-      !productId ||
-      !frameTypeId ||
-      !brandId ||
-      !shapeId ||
-      !rate ||
-      !quantity ||
-      !amount ||
-      !totalAmount
-    ) {
-      return next(new AppError('Missing required fields', 400));
-    }
+    // Ensure prescription is an object if it's provided
+    const parsedPrescription = prescription ? JSON.parse(prescription) : null;
 
-    // Create a new invoice
-    const newInvoice = await db.customerInvoice.create({
+    // Create the invoice in the database
+    const invoice = await db.customerInvoice.create({
       data: {
-        invoiceDate: new Date(invoiceDate),
-        invoiceNo,
         customerName,
         customerPhone,
-        DOB: DOB ? new Date(DOB) : null,
-        DOM: DOM ? new Date(DOM) : null,
-        address,
-        email,
-        LRC,
+        customerLocation,
         orderNo,
-        lensType,
-        rightSPH,
-        leftSPH,
-        rightCYL,
-        leftCYL,
-        rightAXIS,
-        leftAXIS,
-        rightADD,
-        leftADD,
-        productId,
-        frameTypeId,
+        orderDate: new Date(orderDate),
+        testedBy,
+        grandTotal,
+        advance,
+        discount,
+        balance,
+        prescription: parsedPrescription, // Store prescription as JSON
+        products: JSON.stringify(products), // Ensure products are stored as a stringified JSON
         brandId,
+        frameTypeId,
         shapeId,
         rate,
         quantity,
-        discount: discount || 0, // Default to 0 if not provided
+        discountAmount,
         amount,
         totalAmount,
       },
     });
 
-    // Send the created invoice as a response
-    return res.status(201).json({
-      status: 'success',
-      message: 'Customer invoice created successfully',
-      invoice: newInvoice,
+    res.status(201).json({
+      message: 'Invoice created successfully',
+      invoice,
     });
   } catch (error) {
-    // Handle errors gracefully
-    return next(new AppError(error.message, 500));
+    console.error(error);
+    res.status(500).json({
+      message: 'Error creating the invoice',
+      error: error.message,
+    });
   }
 }
 
-// Get all invoices
 async function getAllCustomerInvoices(req, res, next) {
   try {
     const invoices = await db.customerInvoice.findMany();
