@@ -10,7 +10,7 @@ const authenticateUser = require('../middleware/authenticateUser');
 const prescriptionRoutes = express.Router();
 
 prescriptionRoutes.post('/create', authenticateUser, createPrescription);
-// prescriptionRoutes.get('/getAll', authenticateUser, getAllPrescriptions);
+prescriptionRoutes.get('/getAll', authenticateUser, getAllPrescriptions);
 // prescriptionRoutes.put('/update/:id', authenticateUser, updatePrescription);
 // prescriptionRoutes.delete('/delete/:id', authenticateUser, deletePrescription);
 

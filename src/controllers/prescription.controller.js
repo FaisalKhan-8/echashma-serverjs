@@ -2,77 +2,105 @@ const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 const { z } = require('zod');
 
-// Define Zod schema for prescription validation based on your Prisma schema
+// Define the Zod schema for Prescription validation
 const prescriptionSchema = z.object({
-  rightSPH: z.number(),
-  rightCYL: z.number(),
-  rightAXIS: z.number(),
-  rightADD: z.number(),
-  leftSPH: z.number(),
-  leftCYL: z.number(),
-  leftAXIS: z.number(),
-  leftADD: z.number(),
-  lensType: z.string(),
+  side: z.enum(['right', 'left'], {
+    errorMap: () => ({ message: 'Side must be either "right" or "left"' }),
+  }),
+  field: z.enum(['SPH', 'CYL', 'AXIS', 'ADD'], {
+    errorMap: () => ({
+      message: 'Field must be one of "SPH", "CYL", "AXIS", or "ADD"',
+    }),
+  }),
+  value: z
+    .number()
+    .min(-10, { message: 'Value cannot be less than -10' })
+    .max(10, { message: 'Value cannot be greater than 10' })
+    .transform((value) => Number(value.toFixed(2))),
 });
 
+// Function to create a new prescription
 async function createPrescription(req, res, next) {
+  const data = req.body;
+  console.log('Received prescription data:', data);
+
   try {
-    // Validate the request body using the Zod schema
-    const parsedData = prescriptionSchema.safeParse(req.body);
+    // Validate the data with Zod
+    const validatedData = prescriptionSchema.parse(data);
+    console.log('Prescription data is valid.');
 
-    if (!parsedData.success) {
-      // If validation fails, return a 400 response with errors
-      return res.status(400).json({
-        message: 'Validation Error',
-        details: parsedData.error.errors,
-      });
-    }
+    // Round the value before saving it to the database (if needed)
+    const roundedValue = Number(validatedData.value.toFixed(2));
 
-    const {
-      rightSPH,
-      rightCYL,
-      rightAXIS,
-      rightADD,
-      leftSPH,
-      leftCYL,
-      leftAXIS,
-      leftADD,
-      lensType,
-    } = req.body;
-
-    // Check if the lensType already exists in the database (unique constraint check)
+    // Check if a prescription with the same side, field, and value already exists
     const existingPrescription = await db.prescription.findUnique({
-      where: { lensType },
-    });
-
-    if (existingPrescription) {
-      // If a prescription with the same lensType exists, return a conflict error
-      return new AppError(
-        'A prescription with this lens type already exists',
-        409
-      );
-    }
-
-    // Proceed with creating the prescription in the database
-    const newPrescription = await db.prescription.create({
-      data: {
-        rightSPH,
-        rightCYL,
-        rightAXIS,
-        rightADD,
-        leftSPH,
-        leftCYL,
-        leftAXIS,
-        leftADD,
-        lensType,
+      where: {
+        side_field_value: {
+          side: validatedData.side,
+          field: validatedData.field,
+          value: roundedValue,
+        },
       },
     });
 
-    // Send a response with the newly created prescription
-    res.status(201).json(newPrescription);
+    if (existingPrescription) {
+      // If a prescription with the same side, field, and value exists, throw a unique constraint error
+      throw new AppError('Prescription value already exists.', 400);
+    }
+
+    // If no existing prescription, create the new prescription record
+    const prescription = await db.prescription.create({
+      data: {
+        side: validatedData.side,
+        field: validatedData.field,
+        value: roundedValue, // Save the rounded value
+      },
+    });
+
+    console.log('Prescription created:', prescription);
+
+    // Return the created prescription as a response
+    res.status(201).json({
+      message: 'Prescription added successfully',
+      prescription,
+    });
   } catch (error) {
-    next(new AppError(error.message, 500));
+    console.error('Error during prescription creation:', error);
+
+    if (error instanceof z.ZodError) {
+      // Handle validation errors from Zod
+      console.error('Validation errors:', error.errors);
+      throw next(new AppError(error.errors, 400));
+    } else if (error instanceof AppError) {
+      // Custom application errors (like unique constraint violation)
+      console.error('AppError:', error.message);
+      throw next(error);
+    } else {
+      // Handle unexpected errors (e.g., database errors)
+      console.error('Unexpected error:', error);
+      throw next(new AppError(error.message || 'Internal server error', 500));
+    }
   }
 }
 
-module.exports = { createPrescription };
+async function getAllPrescriptions(req, res, next) {
+  try {
+    // Fetch all prescriptions from the database
+    const prescriptions = await db.prescription.findMany();
+
+    // Check if prescriptions exist
+    if (!prescriptions || prescriptions.length === 0) {
+      throw next(new AppError('No prescriptions found', 404));
+    }
+
+    // Send a response with all prescriptions
+    res.status(200).json({
+      status: 'success',
+      data: prescriptions,
+    });
+  } catch (error) {
+    throw next(new AppError(error.message, 500));
+  }
+}
+
+module.exports = { createPrescription, getAllPrescriptions };

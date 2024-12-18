@@ -114,104 +114,95 @@ const createBranch = async (req, res, next) => {
 
 const getBranches = async (req, res, next) => {
   try {
-    const { userId } = req.user;
-    const { role } = req.user;
+    const { userId, role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
+    const { page = 1, limit = 10, searchTerm = '' } = req.query; // Pagination and search parameters
 
-    console.log(userId, role);
+    console.log(req.user);
 
-    // Get pagination and search parameters from the query
-    const { page = 1, limit = 10, searchTerm = '' } = req.query;
-
-    // Convert page and limit to numbers
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
-
-    // Calculate the offset for pagination
     const offset = (pageNum - 1) * limitNum;
 
     let branches, totalBranches;
+    const searchConditions = searchTerm
+      ? {
+          branchName: {
+            contains: searchTerm, // Filter branches by name
+          },
+        }
+      : {};
 
-    // Role-based logic using switch case
     switch (role) {
       case 'ADMIN':
-        // Admin: See all branches
+        // Admin: Can see all branches, no companyId filter needed
         branches = await db.branch.findMany({
           where: {
-            branchName: {
-              contains: searchTerm, // Search for branches by name
-            },
+            ...searchConditions,
           },
           skip: offset,
           take: limitNum,
+          include: {
+            company: true, // Include company details for branches
+          },
         });
 
         totalBranches = await db.branch.count({
           where: {
-            branchName: {
-              contains: searchTerm, // Search for branches by name
-            },
+            ...searchConditions,
           },
         });
         break;
 
       case 'SUBADMIN':
-        // Subadmin: See only branches assigned to them
+        // Subadmin: Can see branches in their company, filter by companyId
         branches = await db.branch.findMany({
           where: {
-            users: {
-              some: {
-                id: userId, // Only branches assigned to this subadmin
-              },
-            },
-            branchName: {
-              contains: searchTerm, // Search filter
-            },
+            companyId: companyId, // Filter by companyId
+            ...searchConditions,
           },
           skip: offset,
           take: limitNum,
+          include: {
+            company: true, // Include company details for branches
+          },
         });
 
         totalBranches = await db.branch.count({
           where: {
-            users: {
-              some: {
-                id: userId,
-              },
-            },
-            branchName: {
-              contains: searchTerm,
-            },
+            companyId: companyId, // Count branches in their company
+            ...searchConditions,
           },
         });
         break;
 
       case 'MANAGER':
-        // Manager: See only branches assigned to them
+        // Manager: Can only see branches assigned to them in their company
         branches = await db.branch.findMany({
           where: {
+            companyId: companyId, // Filter by companyId
             managers: {
               some: {
                 id: userId, // Only branches assigned to this manager
               },
             },
-            branchName: {
-              contains: searchTerm, // Search filter
-            },
+            ...searchConditions,
           },
           skip: offset,
           take: limitNum,
+          include: {
+            company: true, // Include company details for branches
+          },
         });
 
         totalBranches = await db.branch.count({
           where: {
+            companyId: companyId, // Count branches in their company
             managers: {
               some: {
-                id: { in: userId },
+                id: userId, // Ensure the branch is assigned to this manager
               },
             },
-            branchName: {
-              contains: searchTerm,
-            },
+            ...searchConditions,
           },
         });
         break;
@@ -223,7 +214,6 @@ const getBranches = async (req, res, next) => {
         });
     }
 
-    // Respond with the retrieved branches and pagination data
     return res.status(200).json({
       message: `${role} branches retrieved successfully!`,
       branches,

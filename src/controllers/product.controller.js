@@ -1,57 +1,37 @@
 const { z } = require('zod');
-const {
-  CreateProductSchema,
-  UpdateProductSchema,
-} = require('../schema/product');
+
 const db = require('../utils/db.config');
+const { AppError } = require('../errors/AppError');
 
 // Create a new product
-const createProduct = async (req, res) => {
-  const { name, code, branchIds } = req.body;
-  const { userId } = req.user; // Assuming req.user contains the authenticated user's details
+const createProduct = async (req, res, next) => {
+  const { name, code } = req.body;
+  const { companyId } = req.user; // Assuming req.user contains the authenticated user's details
 
   try {
-    // Check if a product with the same name or code already exists
+    // Check if a product with the same name or code already exists within the same company
     const existingProduct = await db.product.findFirst({
       where: {
         OR: [{ name }, { code }],
+        companyId: companyId, // Ensure the product is being created under the correct company
       },
     });
 
     if (existingProduct) {
-      return res.status(400).json({
-        error: 'Product with this name or code already exists',
-      });
+      return next(
+        new AppError(
+          'Product with this name or code already exists in this company!',
+          409
+        )
+      );
     }
 
-    // Ensure branchIds are integers
-    const branchIdsInt = branchIds.map((id) => parseInt(id, 10));
-
-    // Validate the branchIds (ensure they exist and belong to the user)
-    const branches = await db.branch.findMany({
-      where: {
-        id: { in: branchIdsInt }, // Ensure the provided branch IDs exist
-        users: { some: { id: userId } }, // Ensure the branch is associated with the authenticated user
-      },
-    });
-
-    // If any branch ID does not exist or does not belong to the user, return an error
-    if (branches.length !== branchIdsInt.length) {
-      return res.status(400).json({
-        error:
-          'One or more branch IDs are invalid or do not belong to the user',
-      });
-    }
-
-    // Create the new product and associate it with the provided branches
+    // Create the new product and associate it with the provided company
     const newProduct = await db.product.create({
       data: {
         name,
         code,
-        userId, // Associate product with the authenticated user
-        branches: {
-          connect: branchIdsInt.map((branchId) => ({ id: branchId })),
-        },
+        companyId, // Associate product with the authenticated user's company
       },
     });
 
@@ -64,35 +44,39 @@ const createProduct = async (req, res) => {
 
 // Get all products with pagination, search, and associated branches
 const getAllProducts = async (req, res) => {
-  const { userId } = req.user; // Get userId from authenticated user
+  const { userId, companyId, role } = req.user; // Get userId, companyId, and role from the authenticated user
   const { page = 1, limit = 10, search = '' } = req.query;
   const pageNumber = parseInt(page);
   const pageLimit = parseInt(limit);
 
   try {
-    const products = await db.product.findMany({
-      where: {
-        userId, // Only fetch products created by this user
-        name: {
-          contains: search, // Search by product name
-        },
+    let whereClause = {
+      name: {
+        contains: search, // Search by product name
       },
+    };
+
+    // If the user is not an admin, filter by userId and companyId
+    if (role !== 'ADMIN') {
+      whereClause = {
+        ...whereClause,
+        companyId, // Only fetch products for the user's company
+      };
+    }
+
+    // Fetch products based on the dynamically constructed whereClause
+    const products = await db.product.findMany({
+      where: whereClause,
       skip: (pageNumber - 1) * pageLimit,
       take: pageLimit,
-      include: {
-        branches: true, // Include associated branches
-      },
     });
 
+    // Get total products count for pagination
     const totalProducts = await db.product.count({
-      where: {
-        userId, // Count only the user's products
-        name: {
-          contains: search,
-        },
-      },
+      where: whereClause, // Same filtering condition as above
     });
 
+    // Return products and pagination info
     res.status(200).json({
       totalProducts,
       totalPages: Math.ceil(totalProducts / pageLimit),
@@ -135,10 +119,10 @@ const getProductById = async (req, res) => {
 const updateProduct = async (req, res) => {
   const { id } = req.params;
   const { name, code } = req.body;
-  const { userId } = req.user; // Get userId from authenticated user
+  const { companyId, role } = req.user; // Get userId, companyId, and role from authenticated user
 
   try {
-    // Check if a product with the same name or code already exists
+    // Check if a product with the same name or code already exists, excluding the product being updated
     const existingProduct = await db.product.findFirst({
       where: {
         OR: [{ name }, { code }],
@@ -152,14 +136,25 @@ const updateProduct = async (req, res) => {
       });
     }
 
-    // Update the product, ensuring it belongs to the authenticated user
-    const updatedProduct = await db.product.update({
-      where: { id: Number(id), userId }, // Ensure product belongs to the user
-      data: {
-        name,
-        code,
-      },
-    });
+    // Admin users can update any product; others can only update their own products
+    let updatedProduct;
+
+    if (role === 'ADMIN') {
+      // Admin: can update any product
+      updatedProduct = await db.product.update({
+        where: { id: Number(id) },
+        data: { name, code },
+      });
+    } else {
+      // Non-admin users: can only update their own products within their company
+      updatedProduct = await db.product.update({
+        where: {
+          id: Number(id),
+          companyId, // Ensure the product belongs to the authenticated user's company
+        },
+        data: { name, code },
+      });
+    }
 
     res.status(200).json(updatedProduct);
   } catch (error) {

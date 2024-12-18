@@ -165,55 +165,63 @@ async function getAllCompanies(req, res, next) {
   const pageNumber = parseInt(page, 10) || 1;
   const userId = req.user.id;
   const userRole = req.user.role;
+  const userCompanyId = req.user.companyId; // The company ID assigned to the user (for SUBADMIN and MANAGER)
 
   try {
     let whereCondition = {
       companyName: {
-        contains: searchTerm,
+        contains: searchTerm, // Search companies by name
       },
     };
 
+    // Role-based filtering
     switch (userRole) {
       case 'ADMIN':
+        // Admin sees all companies, no additional filters required
         break;
+
       case 'SUBADMIN':
+        // Subadmin can only see their assigned company
+        if (!userCompanyId) {
+          throw new Error('No company assigned to this subadmin');
+        }
         whereCondition = {
           ...whereCondition,
-          users: {
-            some: {
-              id: userId,
-            },
-          },
+          id: userCompanyId, // Filter by the company assigned to the subadmin
         };
         break;
+
       case 'MANAGER':
+        // Manager can only see the company they are part of
+        if (!userCompanyId) {
+          throw new Error('No company assigned to this manager');
+        }
         whereCondition = {
           ...whereCondition,
-          users: {
-            some: {
-              role: 'SUBADMIN',
-              managerId: userId,
-            },
-          },
+          id: userCompanyId, // Filter by the manager's assigned company
         };
         break;
+
       default:
         throw new Error('Invalid user role');
     }
 
+    // Count the total records matching the conditions
     const totalRecords = await db.company.count({
       where: whereCondition,
     });
 
+    // Fetch paginated companies with associated users
     const companies = await db.company.findMany({
       where: whereCondition,
       include: {
-        users: true,
+        users: true, // Include users related to the company
       },
       skip: (pageNumber - 1) * pageSizeNumber,
       take: pageSizeNumber,
     });
 
+    // Respond with the companies and pagination data
     res.json({
       companies,
       pagination: {

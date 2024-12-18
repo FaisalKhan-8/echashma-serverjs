@@ -1,11 +1,11 @@
-const db = require('../utils/db.config')
+const db = require('../utils/db.config');
 
 // Function to get all expenses with pagination and search
 const getAllExpenses = async (req, res) => {
-  const { page = 1, limit = 10, search = '' } = req.query
+  const { page = 1, limit = 10, search = '' } = req.query;
 
-  const pageNumber = Number(page)
-  const limitNumber = Number(limit)
+  const pageNumber = Number(page);
+  const limitNumber = Number(limit);
 
   try {
     const totalExpenses = await db.expense.count({
@@ -14,7 +14,7 @@ const getAllExpenses = async (req, res) => {
           contains: search,
         },
       },
-    })
+    });
 
     const expenses = await db.expense.findMany({
       where: {
@@ -30,30 +30,30 @@ const getAllExpenses = async (req, res) => {
       include: {
         category: true, // Include category data in the result
       },
-    })
+    });
 
     res.json({
       total: totalExpenses,
       page: pageNumber,
       limit: limitNumber,
       data: expenses,
-    })
+    });
   } catch (error) {
-    console.error(error)
+    console.error(error);
     res
       .status(500)
-      .json({ error: 'An error occurred while retrieving expenses.' })
+      .json({ error: 'An error occurred while retrieving expenses.' });
   }
-}
+};
 
 // Function to create a new expense
 const createExpense = async (req, res) => {
-  const { amount, description, categoryId } = req.body
+  const { amount, description, categoryId } = req.body;
 
   if (!amount || !categoryId) {
     return res
       .status(400)
-      .json({ error: 'Amount and category ID are required.' })
+      .json({ error: 'Amount and category ID are required.' });
   }
 
   try {
@@ -63,21 +63,21 @@ const createExpense = async (req, res) => {
         description,
         categoryId, // Include category ID when creating an expense
       },
-    })
+    });
 
-    res.status(201).json(newExpense)
+    res.status(201).json(newExpense);
   } catch (error) {
-    console.error(error)
+    console.error(error);
     res
       .status(500)
-      .json({ error: 'An error occurred while creating the expense.' })
+      .json({ error: 'An error occurred while creating the expense.' });
   }
-}
+};
 
 // Function to update an expense by ID
 const updateExpense = async (req, res) => {
-  const { id } = req.params
-  const { amount, description, categoryId } = req.body
+  const { id } = req.params;
+  const { amount, description, categoryId } = req.body;
 
   try {
     const existingExpense = await db.expense.findUnique({
@@ -85,10 +85,10 @@ const updateExpense = async (req, res) => {
       include: {
         category: true, // Include the related category
       },
-    })
+    });
 
     if (!existingExpense) {
-      return res.status(404).json({ error: 'Expense not found.' })
+      return res.status(404).json({ error: 'Expense not found.' });
     }
 
     const updatedExpense = await db.expense.update({
@@ -98,42 +98,42 @@ const updateExpense = async (req, res) => {
         description,
         categoryId, // Update the category ID
       },
-    })
+    });
 
-    res.json(updatedExpense)
+    res.json(updatedExpense);
   } catch (error) {
-    console.error(error)
+    console.error(error);
     res
       .status(500)
-      .json({ error: 'An error occurred while updating the expense.' })
+      .json({ error: 'An error occurred while updating the expense.' });
   }
-}
+};
 
 // Function to delete an expense by ID
 const deleteExpense = async (req, res) => {
-  const { id } = req.params
+  const { id } = req.params;
 
   try {
     const existingExpense = await db.expense.findUnique({
       where: { id: Number(id) },
-    })
+    });
 
     if (!existingExpense) {
-      return res.status(404).json({ error: 'Expense not found.' })
+      return res.status(404).json({ error: 'Expense not found.' });
     }
 
     await db.expense.delete({
       where: { id: Number(id) },
-    })
+    });
 
-    res.status(204).send()
+    res.status(204).send();
   } catch (error) {
-    console.error(error)
+    console.error(error);
     res
       .status(500)
-      .json({ error: 'An error occurred while deleting the expense.' })
+      .json({ error: 'An error occurred while deleting the expense.' });
   }
-}
+};
 
 // Export the controller functions
 module.exports = {
@@ -141,4 +141,4 @@ module.exports = {
   createExpense,
   updateExpense,
   deleteExpense,
-}
+};

@@ -7,40 +7,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enum to define the eye side (left or right)
+enum EyeSide {
+  left
+  right
+}
+
+// Enum for prescription field types (SPH, CYL, AXIS, ADD)
+enum PrescriptionField {
+  SPH
+  CYL
+  AXIS
+  ADD
+}
+
 model User {
-  id               Int        @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   name             String?
-  email            String     @unique
+  email            String    @unique
   password         String
   password_visible String
-  avatar           String?    @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
-  role             String     @default("MANAGER") // Default role for users
-  created_at       DateTime   @default(now())
-  updated_at       DateTime   @default(now()) @updatedAt
-  uuid             String     @unique @default(uuid())
+  avatar           String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
+  role             String    @default("MANAGER") // Default role for users
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
+  uuid             String    @unique @default(uuid())
   companyId        Int? // Foreign key to reference Company
-  company          Company?   @relation(fields: [companyId], references: [id]) // Relation to the Company model
-  branches         Branch[]   @relation("UserBranches")
+  company          Company?  @relation(fields: [companyId], references: [id]) // Relation to the Company model
+  branches         Branch[]  @relation("UserBranches")
   products         Product[]
-  purchases        Purchase[]
 }
 
 model Company {
   id            Int      @id @default(autoincrement())
   companyName   String   @unique
-  address       String
+  address       String?
   contactPerson String
-  phone         String
+  phone         String?
   email         String   @unique
   gst           String?  @unique // Optional: Review uniqueness requirement
-  pancard       String
-  aadhaarcard   String
+  pancard       String?
+  aadhaarcard   String?
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt
   uuid          String   @unique @default(uuid())
 
   branches Branch[] @relation("CompanyBranches") // Relationship to Branch model
   users    User[] // This is the plural form indicating one company can have many users
+
+  products        Product[]
+  ExpenseCategory ExpenseCategory[]
+  Expense         Expense[]
+  CustomerInvoice CustomerInvoice[]
+  Purchase        Purchase[]
+  Brands          Brands[]
+  CoatingType     CoatingType[]
+  VisionType      VisionType[]
+  ShapeType       ShapeType[]
+  FrameType       FrameType[]
+  Supplier        Supplier[]
+  Inventory       Inventory[]
 }
 
 model Branch {
@@ -54,11 +80,9 @@ model Branch {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  company   Company    @relation("CompanyBranches", fields: [companyId], references: [id])
+  company   Company @relation("CompanyBranches", fields: [companyId], references: [id])
   companyId Int // Foreign key to Company
-  users     User[]     @relation("UserBranches") // Many-to-many relation with User
-  products  Product[]  @relation("BranchProducts")
-  purchases Purchase[]
+  users     User[]  @relation("UserBranches") // Many-to-many relation with User
 }
 
 model Product {
@@ -71,10 +95,12 @@ model Product {
   updatedAt DateTime @updatedAt
   uuid      String   @unique @default(uuid()) // Optional uuid
 
-  branches        Branch[]          @relation("BranchProducts")
-  PurchaseItem    PurchaseItem[]
-  suppliers       Supplier[]
-  CustomerInvoice CustomerInvoice[]
+  PurchaseItem        PurchaseItem[]
+  suppliers           Supplier[]
+  Company             Company?              @relation(fields: [companyId], references: [id])
+  companyId           Int?
+  Inventory           Inventory[]
+  CustomerInvoiceItem CustomerInvoiceItem[]
 }
 
 model Supplier {
@@ -91,41 +117,59 @@ model Supplier {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  products Product[]
-  Purchase Purchase[]
+  products  Product[]
+  Purchase  Purchase[]
+  Company   Company?   @relation(fields: [companyId], references: [id])
+  companyId Int?
 }
 
 model FrameType {
-  id              Int               @id @default(autoincrement())
-  code            String            @unique // Ensure `code` is unique
-  name            String            @unique // Ensure `name` is unique
-  CustomerInvoice CustomerInvoice[]
+  id                  Int                   @id @default(autoincrement())
+  code                String                @unique // Ensure `code` is unique
+  name                String                @unique // Ensure `name` is unique
+  Company             Company?              @relation(fields: [companyId], references: [id])
+  companyId           Int?
+  PurchaseItem        PurchaseItem[]
+  Inventory           Inventory[]
+  CustomerInvoiceItem CustomerInvoiceItem[]
 }
 
 model ShapeType {
-  id              Int               @id @default(autoincrement())
-  code            String            @unique // Ensure `code` is unique
-  name            String            @unique // Ensure `name` is unique
-  CustomerInvoice CustomerInvoice[]
+  id                  Int                   @id @default(autoincrement())
+  code                String                @unique // Ensure `code` is unique
+  name                String                @unique // Ensure `name` is unique
+  Company             Company?              @relation(fields: [companyId], references: [id])
+  companyId           Int?
+  PurchaseItem        PurchaseItem[]
+  Inventory           Inventory[]
+  CustomerInvoiceItem CustomerInvoiceItem[]
 }
 
 model VisionType {
-  id   Int    @id @default(autoincrement())
-  code String @unique // Ensure `code` is unique
-  name String @unique // Ensure `name` is unique
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // Ensure `code` is unique
+  name      String   @unique // Ensure `name` is unique
+  Company   Company? @relation(fields: [companyId], references: [id])
+  companyId Int?
 }
 
 model CoatingType {
-  id   Int    @id @default(autoincrement())
-  code String @unique // Ensure `code` is unique
-  name String @unique // Ensure `name` is unique
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // Ensure `code` is unique
+  name      String   @unique // Ensure `name` is unique
+  Company   Company? @relation(fields: [companyId], references: [id])
+  companyId Int?
 }
 
 model Brands {
-  id              Int               @id @default(autoincrement())
-  code            String            @unique // Ensure `code` is unique
-  name            String            @unique // Ensure `name` is unique  
-  CustomerInvoice CustomerInvoice[]
+  id                  Int                   @id @default(autoincrement())
+  code                String                @unique // Ensure `code` is unique
+  name                String                @unique // Ensure `name` is unique  
+  Company             Company?              @relation(fields: [companyId], references: [id])
+  companyId           Int?
+  PurchaseItem        PurchaseItem[]
+  Inventory           Inventory[]
+  CustomerInvoiceItem CustomerInvoiceItem[]
 }
 
 model Purchase {
@@ -143,44 +187,31 @@ model Purchase {
 
   createdAt DateTime @default(now()) // Creation timestamp
   updatedAt DateTime @updatedAt // Update timestamp
-  User      User?    @relation(fields: [userId], references: [id])
-  userId    Int?
-  Branch    Branch?  @relation(fields: [branchId], references: [id])
-  branchId  Int?
+
+  Company   Company? @relation(fields: [companyId], references: [id])
+  companyId Int?
 }
 
-//  TODO:need to change add frameType and all add fields to the purchase items
 model PurchaseItem {
   id         Int    @id @default(autoincrement())
   purchaseId Int // Foreign key to Purchase
   productId  Int // Foreign key to Product model
   quantity   Int // Product quantity
+  modalNo    String
   rate       Float // Rate per product
   amount     Float // Total amount for the product (rate * quantity)
   cgst       Float? // CGST for the product
   sgst       Float? // SGST for the product
   discount   Float? @default(0)
 
-  purchase Purchase @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
-  Product  Product  @relation(fields: [productId], references: [id])
-}
-
-model ExpenseCategory {
-  id         Int       @id @default(autoincrement())
-  name       String    @unique
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  expenses   Expense[] // One-to-many relationship
-}
-
-model Expense {
-  id          Int             @id @default(autoincrement())
-  amount      Float
-  description String
-  created_at  DateTime        @default(now())
-  updated_at  DateTime        @updatedAt
-  categoryId  Int // Foreign key reference
-  category    ExpenseCategory @relation(fields: [categoryId], references: [id]) // Establishing the relationship
+  purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
+  Product     Product    @relation(fields: [productId], references: [id])
+  Brand       Brands?    @relation(fields: [brandId], references: [id])
+  brandId     Int?
+  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id])
+  frameTypeId Int?
+  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id])
+  shapeTypeId Int?
 }
 
 model CustomerInvoice {
@@ -193,50 +224,95 @@ model CustomerInvoice {
   testedBy         String?
   grandTotal       Float
   advance          Float
-  discount         Float    @default(0)
   balance          Float
+  totalAmount      Float
 
-  // Eye prescription fields
-  prescription Json // Store the prescription as a JSON object for flexibility
+  rightEye Json // Store the prescription for right eye
+  leftEye  Json // Store the prescription for left eye
+  discount Float @default(0)
 
-  // Product details
-  products Json // Store an array of products with fields like name, price, quantity, etc.
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
 
-  // Relations for optional fields (e.g., brands, frame types, shape types)
-  brandId Int?
-  brand   Brands? @relation(fields: [brandId], references: [id])
+  items CustomerInvoiceItem[] @relation("InvoiceToInvoiceItem")
 
-  frameTypeId Int?
-  frameType   FrameType? @relation(fields: [frameTypeId], references: [id])
-
-  shapeId Int?
-  shape   ShapeType? @relation(fields: [shapeId], references: [id])
-
-  // Common invoice calculations
-  rate           Float?
-  quantity       Int?
-  discountAmount Float  @default(0)
-  amount         Float
-  totalAmount    Float
-
-  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  Product   Product? @relation(fields: [productId], references: [id])
-  productId Int?
 }
 
-model Prescription {
-  id        Int      @id @default(autoincrement())
-  rightSPH  Float
-  rightCYL  Float
-  rightAXIS Float
-  rightADD  Float
-  leftSPH   Float
-  leftCYL   Float
-  leftAXIS  Float
-  leftADD   Float
-  lensType  String   @unique
+model CustomerInvoiceItem {
+  id          Int    @id @default(autoincrement())
+  invoiceId   Int
+  productId   Int
+  quantity    Int
+  rate        Float
+  amount      Float
+  discount    Float? @default(0)
+  modalNo     String
+  frameTypeId Int
+  shapeTypeId Int
+  brandId     Int
+
+  customerInvoice CustomerInvoice @relation("InvoiceToInvoiceItem", fields: [invoiceId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id])
+  brands          Brands          @relation(fields: [brandId], references: [id])
+  frameType       FrameType       @relation(fields: [frameTypeId], references: [id])
+  shapeType       ShapeType       @relation(fields: [shapeTypeId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// inventory
+model Inventory {
+  id          Int      @id @default(autoincrement())
+  productId   Int // Foreign key to Product model
+  modalNo     String
+  shapeTypeId Int?
+  brandId     Int?
+  frameTypeId Int?
+  companyId   Int
+  stock       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product   Product    @relation(fields: [productId], references: [id])
+  shapeType ShapeType? @relation(fields: [shapeTypeId], references: [id])
+  brands    Brands?    @relation(fields: [brandId], references: [id])
+  frameType FrameType? @relation(fields: [frameTypeId], references: [id])
+  company   Company    @relation(fields: [companyId], references: [id])
+}
+
+model ExpenseCategory {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+  expenses   Expense[] // One-to-many relationship
+  Company    Company?  @relation(fields: [companyId], references: [id])
+  companyId  Int?
+}
+
+model Expense {
+  id          Int             @id @default(autoincrement())
+  amount      Float
+  description String
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+  categoryId  Int // Foreign key reference
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id]) // Establishing the relationship
+  Company     Company?        @relation(fields: [companyId], references: [id])
+  companyId   Int?
+}
+
+// Prescription model that stores prescription data
+model Prescription {
+  id        Int      @id @default(autoincrement())
+  side      String
+  field     String
+  value     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([side, field, value])
 }

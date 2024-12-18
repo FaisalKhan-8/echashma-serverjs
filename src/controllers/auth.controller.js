@@ -34,23 +34,6 @@ const CreateUser = async (req, res, next) => {
       );
     }
 
-    if (!phone) {
-      return next(
-        new AppError('Missing required fields: phone is mandatory', 400)
-      );
-    }
-
-    // Validate phone format (example: basic phone validation for 10-digit numbers)
-    const phoneRegex = /^[0-9]{10}$/;
-    if (!phoneRegex.test(phone)) {
-      return next(
-        new AppError(
-          'Invalid phone number format. It should be 10 digits.',
-          400
-        )
-      );
-    }
-
     // Extract file paths for pancard and aadhaarcard
     let pancardPath = null;
     let aadhaarcardPath = null;
@@ -64,7 +47,7 @@ const CreateUser = async (req, res, next) => {
 
     let companyId = null;
     let finalEmail = email; // Default to the user-provided email
-    let finalName = contactPerson; // Use the contact person name if provided
+    let finalName = contactPerson || req.body.name; // Use the contact person name if provided
 
     // Start a transaction
     const result = await db.$transaction(async (prisma) => {
@@ -84,7 +67,46 @@ const CreateUser = async (req, res, next) => {
         });
 
         if (existingCompany) {
-          throw new AppError('Company already exists!', 400);
+          return next(
+            // throw new AppError('Company already exists!', 400);
+            new AppError('Company already exists with same name.', 400)
+          );
+        }
+
+        if (!phone) {
+          return next(
+            new AppError('Missing required fields: phone is mandatory', 400)
+          );
+        }
+
+        // Validate phone format (example: basic phone validation for 10-digit numbers)
+        const phoneRegex = /^[0-9]{10}$/;
+        if (!phoneRegex.test(phone)) {
+          return next(
+            new AppError(
+              'Invalid phone number format. It should be 10 digits.',
+              400
+            )
+          );
+        }
+
+        const existingUser = await prisma.user.findUnique({
+          where: { email: finalEmail },
+        });
+
+        if (existingUser) {
+          return next(
+            // throw new AppError('Company already exists!', 400);
+            new AppError('User already exists with this email', 400)
+          );
+        }
+
+        const existingCompanyEmail = await prisma.company.findUnique({
+          where: { email: finalEmail },
+        });
+
+        if (existingCompanyEmail) {
+          throw new AppError('Company already exists with this email!', 400);
         }
 
         // Create the company
@@ -131,7 +153,10 @@ const CreateUser = async (req, res, next) => {
       });
 
       if (existingUser) {
-        throw new AppError('User already exists with this email!', 400);
+        return next(
+          // throw new AppError('Company already exists!', 400);
+          new AppError('User already exists with this email', 400)
+        );
       }
 
       // Hash the password
@@ -143,7 +168,7 @@ const CreateUser = async (req, res, next) => {
           email: finalEmail, // Use the final email
           password: hashedPassword,
           password_visible: password,
-          name: finalName || req.body.contactPerson, // Use final name (contact person or default)
+          name: finalName || req.body.contactPerson || req.body.name, // Use final name (contact person or default)
           role: role || 'MANAGER', // Default to "MANAGER" if role is not specified
           companyId: companyId, // Assign company ID to the user
         },
@@ -239,7 +264,7 @@ const Login = async (req, res, next) => {
 
 const GetAllUser = async (req, res, next) => {
   try {
-    const { userId, role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
+    const { role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
     const { page = 1, limit = 10, searchTerm = '' } = req.query; // Pagination and search parameters
 
     console.log(req.user);
