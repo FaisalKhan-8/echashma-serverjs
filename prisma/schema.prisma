@@ -74,7 +74,7 @@ model Branch {
   branchName    String   @unique
   address       String
   phone         String
-  email         String?  @unique
+  email         String?
   contactPerson String
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
