@@ -1,5 +1,5 @@
 const { AppError } = require('../errors/AppError');
-const db = require('../utils/db.config'); // Assuming you have a DB config
+const db = require('../utils/db.config');
 
 const createCustomerInvoice = async (req, res) => {
   try {
@@ -11,27 +11,34 @@ const createCustomerInvoice = async (req, res) => {
     console.log('body ===>', req.body);
 
     // Step 2: Destructure the incoming data from the request
-    const { products, rightEye, leftEye, orderNo, orderDate, ...invoiceData } =
-      req.body;
+    const {
+      products,
+      rightEye,
+      leftEye,
+      orderDate,
+      gstStatus,
+      ...invoiceData
+    } = req.body;
 
     console.log('products ===>', products);
 
-    // Check if 'products' is present and is an array
-    if (!Array.isArray(products) || products.length === 0) {
-      return res
-        .status(400)
-        .json({ message: 'Products array is missing or empty' });
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'Products must be provided' });
     }
 
-    // Step 3: Check if the 'orderNo' already exists (unique validation)
-    const existingInvoice = await db.customerInvoice.findUnique({
-      where: { orderNo },
+    const missingFields = products.some((product) => {
+      return (
+        !product.productId ||
+        !product.brandId ||
+        !product.frameTypeId ||
+        !product.shapeId
+      );
     });
 
-    if (existingInvoice) {
+    if (missingFields) {
       return res
         .status(400)
-        .json({ message: 'Invoice with this order number already exists' });
+        .json({ message: 'All required fields must be provided v2222' });
     }
 
     // Step 4: Automatically assign 'companyId' from the authenticated user
@@ -43,20 +50,114 @@ const createCustomerInvoice = async (req, res) => {
         .json({ message: 'User does not have an associated company' });
     }
 
-    // Step 5: Prepare items from products array and validate stock
-    const items = products.map((item) => ({
-      productId: item.productId,
-      quantity: item.quantity,
-      rate: item.price,
-      amount: item.amount,
-      modalNo: item.modalNo,
-      frameTypeId: item.frameTypeId,
-      shapeTypeId: item.shapeId,
-      brandId: item.brandId,
-    }));
+    // Step 4: Generate a unique invoice number
+    let invoiceNo;
+    let lastInvoice;
 
-    // Calculate the total amount for the invoice
+    // Loop until a unique invoice number is generated
+    do {
+      // Fetch the most recent invoice number for the same company
+      lastInvoice = await db.customerInvoice.findFirst({
+        orderBy: { createdAt: 'desc' }, // Get the latest invoice
+        select: { orderNo: true },
+      });
+
+      if (lastInvoice) {
+        // Extract the numeric part from the last invoice number (e.g., "EC123")
+        const lastInvoiceNo = lastInvoice.orderNo; // Example: "EC123"
+        const numericPart = lastInvoiceNo.replace('EC', ''); // Remove 'EC' prefix
+
+        // Check if the extracted numeric part is a valid number
+        const numericValue = parseInt(numericPart, 10);
+        if (!isNaN(numericValue)) {
+          // Increment the numeric part if it's valid
+          invoiceNo = `EC${numericValue + 1}`;
+        } else {
+          // If the extracted part is not a number, start from EC1
+          invoiceNo = 'EC1';
+        }
+      } else {
+        // If no previous invoice exists, start from EC1
+        invoiceNo = 'EC1';
+      }
+
+      console.log('Generated invoiceNo:', invoiceNo);
+
+      // Check if an invoice with this number already exists
+      existingInvoice = await db.customerInvoice.findUnique({
+        where: { orderNo: invoiceNo },
+      });
+    } while (existingInvoice);
+
+    // Step 5: Prepare items from products array and validate stock
+    // const items = products.map((item) => ({
+    //   productId: item.productId,
+    //   quantity: item.quantity,
+    //   rate: item.price,
+    //   amount: item.amount,
+    //   modalNo: item.modalNo,
+    //   frameTypeId: item.frameTypeId,
+    //   shapeTypeId: item.shapeId,
+    //   brandId: item.brandId,
+    // }));
+
+    // let cgst = 0;
+    // let sgst = 0;
+    // let totalAmount = amount;
+
+    // // If GST is enabled, calculate CGST and SGST
+    // if (gstStatus) {
+    //   const gstRate = 0.18; // Assuming 18% GST, can be dynamic if needed
+    //   const gstAmount = amount * gstRate;
+    //   cgst = gstAmount / 2; // 9% CGST
+    //   sgst = gstAmount / 2; // 9% SGST
+    //   totalAmount = amount + cgst + sgst;
+    // }
+
+    // Step 5: Prepare items from products array and validate stock
+    const items = products.map((item) => {
+      const {
+        productId,
+        quantity,
+        price,
+        amount,
+        modalNo,
+        frameTypeId,
+        shapeId,
+        brandId,
+      } = item;
+
+      let cgst = 0;
+      let sgst = 0;
+      let totalAmount = amount;
+
+      // If GST is enabled, calculate CGST and SGST
+      if (gstStatus) {
+        const gstRate = 0.18; // Assuming 18% GST, can be dynamic if needed
+        const gstAmount = amount * gstRate;
+        cgst = gstAmount / 2; // 9% CGST
+        sgst = gstAmount / 2; // 9% SGST
+        totalAmount = amount + cgst + sgst;
+      }
+
+      return {
+        productId,
+        quantity,
+        rate: price,
+        amount: totalAmount,
+        modalNo,
+        frameTypeId,
+        shapeTypeId: shapeId,
+        brandId,
+        cgst,
+        sgst,
+      };
+    });
+
+    // Calculate the total amount for the invoice (including GST if applicable)
     const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+    const totalCGST = items.reduce((sum, item) => sum + item.cgst, 0);
+    const totalSGST = items.reduce((sum, item) => sum + item.sgst, 0);
 
     // Step 6: Convert orderDate to Date object if it's not already
     const formattedOrderDate = new Date(orderDate);
@@ -80,27 +181,44 @@ const createCustomerInvoice = async (req, res) => {
         } = product;
 
         // Fetch inventory record
-        const inventoryRecord = await prisma.inventory.findFirst({
+        // const inventoryRecord = await prisma.inventory.findFirst({
+        //   where: {
+        //     productId,
+        //     shapeTypeId,
+        //     brandId,
+        //     frameTypeId,
+        //     companyId,
+        //     modalNo: modalNo || undefined,
+        //   },
+        // });
+
+        const inventoryQuery = {
           where: {
             productId,
-            modalNo,
             shapeTypeId,
             brandId,
             frameTypeId,
             companyId,
           },
-        });
+        };
+
+        // Fetch inventory record
+        const inventoryRecord = await prisma.inventory.findFirst(
+          inventoryQuery
+        );
+
+        console.log(inventoryRecord, '===inventoryRecord');
 
         if (!inventoryRecord) {
           return new AppError(
-            `Inventory record not found for productId: ${productId}, modalNo: ${modalNo}`
+            `Inventory record not found for productId: ${productId}`
           );
         }
 
         // Check if stock is sufficient
         if (inventoryRecord.stock < quantity) {
           return new AppError(
-            `Insufficient stock for productId: ${productId}, modalNo: ${modalNo}. Available stock: ${inventoryRecord.stock}, requested: ${quantity}`
+            `Insufficient stock for productId: ${productId}. Available stock: ${inventoryRecord.stock}, requested: ${quantity}`
           );
         }
 
@@ -123,7 +241,7 @@ const createCustomerInvoice = async (req, res) => {
       const invoice = await prisma.customerInvoice.create({
         data: {
           ...invoiceData,
-          orderNo,
+          orderNo: invoiceNo,
           totalAmount,
           rightEye,
           leftEye,
@@ -135,8 +253,12 @@ const createCustomerInvoice = async (req, res) => {
         },
       });
 
+      console.log(invoice, '===create ');
+
       return invoice;
     });
+
+    console.log(newInvoice, '=== newInvoice ');
 
     // Return the newly created invoice
     return res.status(201).json(newInvoice);
@@ -284,7 +406,7 @@ const getCustomerInvoiceById = async (req, res, next) => {
           items: {
             include: {
               product: true, // Include related product details
-              brands: true, // Corrected to 'brands', assuming that's the correct relation name
+              brands: true,
               frameType: true, // Include related frameType details
               shapeType: true, // Include related shapeType details
             },
@@ -312,7 +434,7 @@ const getCustomerInvoiceById = async (req, res, next) => {
     }
 
     // For SUBADMIN and MANAGER: check if the invoice belongs to their company
-    const invoice = await db.customerInvoice.findUnique({
+    const invoice = await db.customerInvoice.findFirst({
       where: {
         id: parseInt(id),
         companyId: companyId, // Invoice must belong to the user's company

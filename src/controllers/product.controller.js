@@ -166,27 +166,53 @@ const updateProduct = async (req, res) => {
 // Delete a product by ID, removing associations with suppliers and branches
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
-  const { userId } = req.user; // Get userId from authenticated user
+  const { companyId, role } = req.user; // Get companyId and role from authenticated user
+
+  console.log(id);
+  console.log(companyId);
+  console.log(role);
 
   try {
+    // If the user is an ADMIN, they can delete any product
+    if (role === 'ADMIN') {
+      const product = await db.product.findUnique({
+        where: { id: Number(id) },
+      });
+
+      console.log(product);
+
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Delete the product
+      await db.product.delete({
+        where: { id: Number(id) },
+      });
+
+      return res.status(204).send(); // No content, successfully deleted
+    }
+
+    // If the user is SUBADMIN or MANAGER, they can only delete their own company's product
     const product = await db.product.findUnique({
-      where: { id: Number(id), userId }, // Ensure product belongs to the user
+      where: { id: Number(id), companyId }, // Ensure product belongs to the user's company
     });
 
     if (!product) {
-      return res
-        .status(404)
-        .json({ error: 'Product not found or not owned by user' });
+      return res.status(404).json({
+        error: "Product not found or not owned by the user's company",
+      });
     }
 
+    // Delete the product
     await db.product.delete({
-      where: { id: Number(id), userId },
+      where: { id: Number(id), companyId },
     });
 
-    res.status(204).send(); // No content, successfully deleted
+    return res.status(204).send(); // No content, successfully deleted
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Unable to delete product' });
+    return res.status(500).json({ error: 'Unable to delete product' });
   }
 };
 

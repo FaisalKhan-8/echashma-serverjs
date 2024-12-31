@@ -2,25 +2,38 @@ const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 
 const getStock = async (req, res, next) => {
+  console.error('From inventory');
+
   const { companyId } = req.user;
   const { productId, brandId, modalNo, frameTypeId, shapeTypeId } = req.body;
 
-  // Check if all required fields are provided
-  if (!productId || !brandId || !modalNo || !frameTypeId || !shapeTypeId) {
-    return next(new AppError('All required fields must be provided', 400));
+  console.log(req.body, 'From inventory');
+
+  console.log(req.body);
+  // Check if the required fields (excluding modalNo) are provided
+  if (!productId || !brandId || !frameTypeId || !shapeTypeId) {
+    return next(
+      new AppError('All required fields must be provided 11111', 400)
+    );
   }
 
   try {
-    // Query the inventory table based on provided fields
+    // Construct the query object, include modalNo only if it's provided
+    const query = {
+      productId,
+      brandId,
+      frameTypeId,
+      shapeTypeId,
+      companyId,
+    };
+
+    if (modalNo) {
+      query.modalNo = modalNo;
+    }
+
+    // Query the inventory table based on the provided fields
     const inventory = await db.inventory.findFirst({
-      where: {
-        productId,
-        brandId,
-        modalNo,
-        frameTypeId,
-        shapeTypeId,
-        companyId,
-      },
+      where: query,
       select: {
         stock: true, // Return only the stock field
       },

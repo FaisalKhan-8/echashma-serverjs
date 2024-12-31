@@ -248,6 +248,8 @@ model CustomerInvoiceItem {
   rate        Float
   amount      Float
   discount    Float? @default(0)
+  cgst        Float? // CGST amount for this item
+  sgst        Float? // SGST amount for this item
   modalNo     String
   frameTypeId Int
   shapeTypeId Int
@@ -267,7 +269,7 @@ model CustomerInvoiceItem {
 model Inventory {
   id          Int      @id @default(autoincrement())
   productId   Int // Foreign key to Product model
-  modalNo     String
+  modalNo     String?
   shapeTypeId Int?
   brandId     Int?
   frameTypeId Int?
@@ -296,7 +298,7 @@ model ExpenseCategory {
 model Expense {
   id          Int             @id @default(autoincrement())
   amount      Float
-  description String
+  description String?
   created_at  DateTime        @default(now())
   updated_at  DateTime        @updatedAt
   categoryId  Int // Foreign key reference

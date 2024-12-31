@@ -140,24 +140,16 @@ exports.createPurchase = async (req, res, next) => {
 
       // Update or create inventory for each item
       for (const item of purchaseItemsData) {
-        const {
-          productId,
-          quantity,
-          modalNo,
-          frameTypeId,
-          shapeTypeId,
-          brandId,
-        } = item;
+        const { productId, quantity, frameTypeId, shapeTypeId, brandId } = item;
 
         // Check if the inventory record exists
         const inventory = await prisma.inventory.findFirst({
           where: {
             productId,
-            modalNo,
             frameTypeId,
             shapeTypeId,
             brandId,
-            companyId, // Ensure company-level uniqueness
+            companyId,
           },
         });
 
@@ -172,7 +164,6 @@ exports.createPurchase = async (req, res, next) => {
           await prisma.inventory.create({
             data: {
               productId,
-              modalNo,
               frameTypeId,
               shapeTypeId,
               brandId,
@@ -416,27 +407,42 @@ exports.getAllPurchases = async (req, res) => {
 // Get a specific purchase by ID
 exports.getPurchaseById = async (req, res) => {
   const { id } = req.params;
+  const { companyId, role } = req.user;
+
   try {
+    const whereClause = { id: parseInt(id) };
+
+    // Restrict access for SUBADMIN and MANAGER
+    if (role === 'SUBADMIN' || role === 'MANAGER') {
+      whereClause.companyId = companyId;
+    }
+
     const purchase = await db.purchase.findUnique({
-      where: { id: parseInt(id) },
+      where: whereClause,
       include: {
         items: {
           include: {
-            Product: true, // Include the product details for each purchase item
+            Product: true, // Include related Product details
+            Brand: true, // Include related Brand details
+            FrameType: true, // Include related FrameType details
+            ShapeType: true, // Include related ShapeType details
           },
         },
+        supplier: true, // Include related Supplier model
+        Company: true, // Include related Company model
       },
     });
 
     if (!purchase) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Purchase not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase not found or access denied',
+      });
     }
 
     res.status(200).json({ success: true, data: purchase });
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching purchase:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

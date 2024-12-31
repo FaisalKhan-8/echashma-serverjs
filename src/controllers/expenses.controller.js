@@ -60,7 +60,7 @@ const createExpense = async (req, res) => {
     const newExpense = await db.expense.create({
       data: {
         amount,
-        description,
+        description: description || null,
         categoryId, // Include category ID when creating an expense
       },
     });
