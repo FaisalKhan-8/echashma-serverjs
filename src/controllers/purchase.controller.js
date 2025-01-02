@@ -126,23 +126,23 @@ exports.createPurchase = async (req, res, next) => {
           purchaseDate: new Date(purchaseDate),
           billNo,
           supplierId,
-          companyId,
+          companyId, // Include companyId here
           totalAmount,
-          totalCGST: gstStatus ? totalCGST : 0,
-          totalSGST: gstStatus ? totalSGST : 0,
+          totalCGST: gstStatus ? totalCGST : 0, // Set CGST only if gstStatus is true
+          totalSGST: gstStatus ? totalSGST : 0, // Set SGST only if gstStatus is true
           netTotal: netTotal + roundOff,
           items: {
             create: purchaseItemsData.map((item) => ({
-              productId: item.productId, // Directly referencing the productId
+              product: { connect: { id: item.productId } }, // Correctly reference the product relation
               quantity: item.quantity,
               rate: item.rate,
               discount: item.discount,
               amount: item.amount,
               cgst: item.cgst,
               sgst: item.sgst,
-              modalNo: item.modalNo,
+              modalNo: item.modalNo || null,
               frameTypeId: item.frameTypeId,
-              shapeTypeId: item.shapeTypeId, // Adjusted to use shapeTypeId
+              shapeTypeId: item.shapeTypeId,
               brandId: item.brandId,
             })),
           },
