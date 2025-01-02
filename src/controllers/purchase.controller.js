@@ -109,7 +109,7 @@ exports.createPurchase = async (req, res, next) => {
         amount: amountAfterDiscount,
         cgst,
         sgst,
-        modalNo,
+        modalNo: modalNo || null,
         frameTypeId,
         shapeTypeId: shapeId,
         brandId, // Correct field name here
