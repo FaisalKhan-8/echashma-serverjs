@@ -3,7 +3,7 @@ const db = require('../utils/db.config');
 
 exports.createPurchase = async (req, res, next) => {
   const { purchaseDate, billNo, supplierId, items, gstStatus } = req.body;
-  const { companyId } = req.user; // Only using companyId from the authenticated user
+  const { companyId } = req.user; // Using companyId from the authenticated user
 
   console.log(req.body);
 
@@ -61,10 +61,10 @@ exports.createPurchase = async (req, res, next) => {
         quantity,
         rate,
         discount = 0,
-        modalNo,
+        modalNo = null,
         frameTypeId,
-        shapeId,
-        brandId, // Correct field name here
+        shapeTypeId,
+        brandId,
       } = item;
 
       // Validate product
@@ -111,8 +111,8 @@ exports.createPurchase = async (req, res, next) => {
         sgst,
         modalNo: modalNo || null,
         frameTypeId,
-        shapeTypeId: shapeId,
-        brandId, // Correct field name here
+        shapeTypeId,
+        brandId,
       });
     }
 
