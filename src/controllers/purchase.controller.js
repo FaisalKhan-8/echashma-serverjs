@@ -141,9 +141,9 @@ exports.createPurchase = async (req, res, next) => {
               cgst: item.cgst,
               sgst: item.sgst,
               modalNo: item.modalNo || null,
-              frameTypeId: item.frameTypeId,
-              shapeTypeId: item.shapeTypeId,
-              brandId: item.brandId,
+              frameTypeId: item.FrameType,
+              shapeTypeId: item.ShapeType,
+              brandId: item.brand,
             })),
           },
         },
@@ -356,7 +356,8 @@ exports.getAllPurchases = async (req, res) => {
             {
               items: {
                 some: {
-                  Product: {
+                  product: {
+                    // Change `Product` to `product`
                     name: { contains: search, mode: 'insensitive' }, // Case-insensitive search by product name
                   },
                 },
@@ -369,7 +370,7 @@ exports.getAllPurchases = async (req, res) => {
         include: {
           items: {
             include: {
-              Product: true, // Include related Product model
+              product: true, // Change `Product` to `product`
               Brand: true, // Include related Brand model
               FrameType: true, // Include related FrameType model
               ShapeType: true, // Include related ShapeType model
@@ -390,7 +391,8 @@ exports.getAllPurchases = async (req, res) => {
             {
               items: {
                 some: {
-                  Product: {
+                  product: {
+                    // Change `Product` to `product`
                     name: { contains: search, mode: 'insensitive' },
                   },
                 },
@@ -439,7 +441,7 @@ exports.getPurchaseById = async (req, res) => {
       include: {
         items: {
           include: {
-            Product: true, // Include related Product details
+            product: true, // Include related Product details
             Brand: true, // Include related Brand details
             FrameType: true, // Include related FrameType details
             ShapeType: true, // Include related ShapeType details
