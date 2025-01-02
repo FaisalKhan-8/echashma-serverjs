@@ -111,7 +111,7 @@ exports.createPurchase = async (req, res, next) => {
         sgst,
         modalNo: modalNo || null,
         frameTypeId,
-        shapeTypeId: shapeId || null, // Adjusted for shapeId
+        shapeTypeId: shapeId,
         brandId,
       });
     }
@@ -141,9 +141,9 @@ exports.createPurchase = async (req, res, next) => {
               cgst: item.cgst,
               sgst: item.sgst,
               modalNo: item.modalNo || null,
-              frameTypeId: item.FrameType,
-              shapeTypeId: item.ShapeType,
-              brandId: item.brand,
+              FrameType: { connect: { id: item.frameTypeId } },
+              ShapeType: { connect: { id: item.shapeTypeId } },
+              Brand: { connect: { id: item.brandId } },
             })),
           },
         },
