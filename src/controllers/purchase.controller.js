@@ -126,7 +126,7 @@ exports.createPurchase = async (req, res, next) => {
           purchaseDate: new Date(purchaseDate),
           billNo,
           supplierId,
-          companyId, // companyId is included here
+          companyId, // Include companyId here
           totalAmount,
           totalCGST: gstStatus ? totalCGST : 0, // Set CGST only if gstStatus is true
           totalSGST: gstStatus ? totalSGST : 0, // Set SGST only if gstStatus is true
@@ -135,14 +135,14 @@ exports.createPurchase = async (req, res, next) => {
             create: purchaseItemsData,
           },
         },
-        include: { items: true },
+        include: { items: true }, // Include related items
       });
 
-      // Update or create inventory for each item
-      for (const item of purchaseItemsData) {
+      // Prepare inventory updates
+      const inventoryPromises = purchaseItemsData.map(async (item) => {
         const { productId, quantity, frameTypeId, shapeTypeId, brandId } = item;
 
-        // Check if the inventory record exists
+        // Check if inventory exists
         const inventory = await prisma.inventory.findFirst({
           where: {
             productId,
@@ -154,14 +154,14 @@ exports.createPurchase = async (req, res, next) => {
         });
 
         if (inventory) {
-          // If inventory exists, increment the stock
-          await prisma.inventory.update({
+          // Increment the stock if inventory exists
+          return prisma.inventory.update({
             where: { id: inventory.id },
             data: { stock: { increment: quantity } },
           });
         } else {
-          // If inventory does not exist, create a new record
-          await prisma.inventory.create({
+          // Create a new inventory record if it does not exist
+          return prisma.inventory.create({
             data: {
               productId,
               frameTypeId,
@@ -172,7 +172,10 @@ exports.createPurchase = async (req, res, next) => {
             },
           });
         }
-      }
+      });
+
+      // Execute all inventory operations
+      await Promise.all(inventoryPromises);
 
       return purchase;
     });
