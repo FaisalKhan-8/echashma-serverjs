@@ -63,7 +63,7 @@ exports.createPurchase = async (req, res, next) => {
         discount = 0,
         modalNo = null,
         frameTypeId,
-        shapeTypeId,
+        shapeId, // Updated to match the payload key
         brandId,
       } = item;
 
@@ -111,7 +111,7 @@ exports.createPurchase = async (req, res, next) => {
         sgst,
         modalNo: modalNo || null,
         frameTypeId,
-        shapeTypeId,
+        shapeTypeId: shapeId || null, // Adjusted for shapeId
         brandId,
       });
     }
@@ -120,30 +120,29 @@ exports.createPurchase = async (req, res, next) => {
     const roundOff = Math.round(netTotal) - netTotal;
 
     // Create purchase and purchase items in a transaction
-    // Create purchase and purchase items in a transaction
     const newPurchase = await db.$transaction(async (prisma) => {
       const purchase = await prisma.purchase.create({
         data: {
           purchaseDate: new Date(purchaseDate),
           billNo,
           supplierId,
-          companyId, // Include companyId here
+          companyId,
           totalAmount,
-          totalCGST: gstStatus ? totalCGST : 0, // Set CGST only if gstStatus is true
-          totalSGST: gstStatus ? totalSGST : 0, // Set SGST only if gstStatus is true
+          totalCGST: gstStatus ? totalCGST : 0,
+          totalSGST: gstStatus ? totalSGST : 0,
           netTotal: netTotal + roundOff,
           items: {
             create: purchaseItemsData.map((item) => ({
-              product: { connect: { id: item.productId } }, // Properly reference the product
+              productId: item.productId, // Directly referencing the productId
               quantity: item.quantity,
               rate: item.rate,
               discount: item.discount,
               amount: item.amount,
               cgst: item.cgst,
               sgst: item.sgst,
-              modalNo: item.modalNo || null,
+              modalNo: item.modalNo,
               frameTypeId: item.frameTypeId,
-              shapeTypeId: item.shapeTypeId,
+              shapeTypeId: item.shapeTypeId, // Adjusted to use shapeTypeId
               brandId: item.brandId,
             })),
           },
