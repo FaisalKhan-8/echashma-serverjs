@@ -2,15 +2,19 @@ const { PrismaClient } = require('@prisma/client');
 
 let db;
 
-// In serverless environments, reuse the Prisma Client instance across function invocations
+// Reuse the Prisma Client instance across function invocations in serverless environments
 if (process.env.NODE_ENV === 'production') {
-  db = new PrismaClient();
+  db = new PrismaClient({
+    log: ['query', 'info', 'warn', 'error'], // Log configuration for production
+  });
 } else {
-  // In development, we can safely reuse the Prisma Client instance in memory
-  if (!global.prisma) {
-    global.prisma = new PrismaClient();
+  // In development, ensure Prisma Client instance is reused to prevent multiple instances
+  if (!global.db) {
+    global.db = new PrismaClient({
+      log: ['query', 'info', 'warn', 'error'], // Log configuration for development
+    });
   }
-  db = global.prisma;
+  db = global.db;
 }
 
 module.exports = db;
