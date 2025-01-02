@@ -120,6 +120,7 @@ exports.createPurchase = async (req, res, next) => {
     const roundOff = Math.round(netTotal) - netTotal;
 
     // Create purchase and purchase items in a transaction
+    // Create purchase and purchase items in a transaction
     const newPurchase = await db.$transaction(async (prisma) => {
       const purchase = await prisma.purchase.create({
         data: {
@@ -132,10 +133,24 @@ exports.createPurchase = async (req, res, next) => {
           totalSGST: gstStatus ? totalSGST : 0, // Set SGST only if gstStatus is true
           netTotal: netTotal + roundOff,
           items: {
-            create: purchaseItemsData,
+            create: purchaseItemsData.map((item) => ({
+              product: { connect: { id: item.productId } }, // Properly reference the product
+              quantity: item.quantity,
+              rate: item.rate,
+              discount: item.discount,
+              amount: item.amount,
+              cgst: item.cgst,
+              sgst: item.sgst,
+              modalNo: item.modalNo || null,
+              frameTypeId: item.frameTypeId,
+              shapeTypeId: item.shapeTypeId,
+              brandId: item.brandId,
+            })),
           },
         },
-        include: { items: true }, // Include related items
+        include: {
+          items: true, // Include related items
+        },
       });
 
       // Prepare inventory updates

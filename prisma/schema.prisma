@@ -205,7 +205,7 @@ model PurchaseItem {
   discount   Float?  @default(0)
 
   purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
-  Product     Product    @relation(fields: [productId], references: [id])
+  product     Product    @relation(fields: [productId], references: [id])
   Brand       Brands?    @relation(fields: [brandId], references: [id])
   brandId     Int?
   FrameType   FrameType? @relation(fields: [frameTypeId], references: [id])
