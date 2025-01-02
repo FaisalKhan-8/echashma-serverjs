@@ -193,16 +193,16 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id         Int    @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   purchaseId Int // Foreign key to Purchase
   productId  Int // Foreign key to Product model
   quantity   Int // Product quantity
-  modalNo    String
+  modalNo    String?
   rate       Float // Rate per product
   amount     Float // Total amount for the product (rate * quantity)
   cgst       Float? // CGST for the product
   sgst       Float? // SGST for the product
-  discount   Float? @default(0)
+  discount   Float?  @default(0)
 
   purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade) // Enable cascading delete
   Product     Product    @relation(fields: [productId], references: [id])
@@ -241,16 +241,16 @@ model CustomerInvoice {
 }
 
 model CustomerInvoiceItem {
-  id          Int    @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   invoiceId   Int
   productId   Int
   quantity    Int
   rate        Float
   amount      Float
-  discount    Float? @default(0)
+  discount    Float?  @default(0)
   cgst        Float? // CGST amount for this item
   sgst        Float? // SGST amount for this item
-  modalNo     String
+  modalNo     String?
   frameTypeId Int
   shapeTypeId Int
   brandId     Int
