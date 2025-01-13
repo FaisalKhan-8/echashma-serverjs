@@ -1,11 +1,17 @@
 const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 
-const createCustomerInvoice = async (req, res) => {
+const createCustomerInvoice = async (req, res, next) => {
+  const { companyId, branchId: userBranchId, role } = req.user;
+  const { branchId: queryBranchId } = req.query;
+
+  console.log(userBranchId, 'userBranchId');
+  console.log(req.user, 'req.user');
+
   try {
     // Step 1: Check if the request body is empty
     if (!req.body || Object.keys(req.body).length === 0) {
-      return res.status(400).json({ message: 'Request body is empty' });
+      throw new AppError('Request body is empty', 400);
     }
 
     console.log('body ===>', req.body);
@@ -23,7 +29,7 @@ const createCustomerInvoice = async (req, res) => {
     console.log('products ===>', products);
 
     if (!products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ message: 'Products must be provided' });
+      throw new AppError('Products must be provided', 400);
     }
 
     const missingFields = products.some((product) => {
@@ -36,18 +42,32 @@ const createCustomerInvoice = async (req, res) => {
     });
 
     if (missingFields) {
-      return res
-        .status(400)
-        .json({ message: 'All required fields must be provided v2222' });
+      throw new AppError('All required fields must be provided');
     }
 
-    // Step 4: Automatically assign 'companyId' from the authenticated user
-    const companyId = req.user?.companyId;
-
     if (!companyId) {
-      return res
-        .status(400)
-        .json({ message: 'User does not have an associated company' });
+      throw new AppError('User does not have an associated company', 400);
+    }
+
+    // Step 4: Assign branchId based on user role
+    let branchId;
+    if (role === 'MANAGER') {
+      // For MANAGER, use the branchId from the token (user's associated branch)
+      branchId = userBranchId;
+    } else if (
+      role === 'SUPER_ADMIN' ||
+      role === 'ADMIN' ||
+      role === 'SUBADMIN'
+    ) {
+      // For SUPER_ADMIN, ADMIN, and SUBADMIN, use branchId from query parameters
+      branchId = queryBranchId;
+    } else {
+      // If the role is unrecognized, return an error
+      return res.status(403).json({ message: 'Unauthorized role' });
+    }
+
+    if (!branchId) {
+      return res.status(400).json({ message: 'Branch ID is required' });
     }
 
     // Step 4: Generate a unique invoice number
@@ -88,31 +108,6 @@ const createCustomerInvoice = async (req, res) => {
         where: { orderNo: invoiceNo },
       });
     } while (existingInvoice);
-
-    // Step 5: Prepare items from products array and validate stock
-    // const items = products.map((item) => ({
-    //   productId: item.productId,
-    //   quantity: item.quantity,
-    //   rate: item.price,
-    //   amount: item.amount,
-    //   modalNo: item.modalNo,
-    //   frameTypeId: item.frameTypeId,
-    //   shapeTypeId: item.shapeId,
-    //   brandId: item.brandId,
-    // }));
-
-    // let cgst = 0;
-    // let sgst = 0;
-    // let totalAmount = amount;
-
-    // // If GST is enabled, calculate CGST and SGST
-    // if (gstStatus) {
-    //   const gstRate = 0.18; // Assuming 18% GST, can be dynamic if needed
-    //   const gstAmount = amount * gstRate;
-    //   cgst = gstAmount / 2; // 9% CGST
-    //   sgst = gstAmount / 2; // 9% SGST
-    //   totalAmount = amount + cgst + sgst;
-    // }
 
     // Step 5: Prepare items from products array and validate stock
     const items = products.map((item) => {
@@ -164,7 +159,7 @@ const createCustomerInvoice = async (req, res) => {
 
     // Check if the orderDate is a valid Date
     if (isNaN(formattedOrderDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid orderDate format' });
+      throw new AppError('Invalid orderDate format', 400);
     }
 
     // Step 7: Create the invoice and decrement stock in a single transaction
@@ -179,18 +174,6 @@ const createCustomerInvoice = async (req, res) => {
           frameTypeId,
           quantity,
         } = product;
-
-        // Fetch inventory record
-        // const inventoryRecord = await prisma.inventory.findFirst({
-        //   where: {
-        //     productId,
-        //     shapeTypeId,
-        //     brandId,
-        //     frameTypeId,
-        //     companyId,
-        //     modalNo: modalNo || undefined,
-        //   },
-        // });
 
         const inventoryQuery = {
           where: {
@@ -247,6 +230,7 @@ const createCustomerInvoice = async (req, res) => {
           leftEye,
           orderDate: formattedOrderDate,
           companyId,
+          branchId,
           items: {
             create: items,
           },
@@ -264,9 +248,7 @@ const createCustomerInvoice = async (req, res) => {
     return res.status(201).json(newInvoice);
   } catch (error) {
     console.error(error);
-    return res
-      .status(500)
-      .json({ message: 'Error creating invoice', error: error.message });
+    next(error);
   }
 };
 

@@ -80,16 +80,19 @@ model Branch {
   updated_at    DateTime @updatedAt
   uuid          String   @unique @default(uuid())
 
-  company   Company @relation("CompanyBranches", fields: [companyId], references: [id])
-  companyId Int // Foreign key to Company
-  users     User[]  @relation("UserBranches") // Many-to-many relation with User
+  company         Company           @relation("CompanyBranches", fields: [companyId], references: [id])
+  companyId       Int // Foreign key to Company
+  users           User[]            @relation("UserBranches") // Many-to-many relation with User
+  CustomerInvoice CustomerInvoice[]
+
+  @@unique([branchName, companyId])
 }
 
 model Product {
   id        Int      @id @default(autoincrement())
   name      String   @unique
   code      String   @unique
-  userId    Int? // Optional userId
+  userId    Int?
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,6 +104,9 @@ model Product {
   companyId           Int?
   Inventory           Inventory[]
   CustomerInvoiceItem CustomerInvoiceItem[]
+
+  @@unique([companyId, name]) // Ensuring unique name per company
+  @@unique([companyId, code]) // Ensuring unique code per company
 }
 
 model Supplier {
@@ -233,6 +239,8 @@ model CustomerInvoice {
 
   companyId Int
   company   Company @relation(fields: [companyId], references: [id])
+  branchId  Int?
+  branch    Branch? @relation(fields: [branchId], references: [id])
 
   items CustomerInvoiceItem[] @relation("InvoiceToInvoiceItem")
 

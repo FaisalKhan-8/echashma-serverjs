@@ -27,6 +27,8 @@ const CreateUser = async (req, res, next) => {
     const userRole = req.user.role; // Role of the logged-in user
     const userCompanyId = req.user.companyId; // For SUBADMIN, their assigned company ID
 
+    console.log(role, 'roleee');
+
     // Validate required fields manually
     if (!password) {
       return next(
@@ -51,8 +53,8 @@ const CreateUser = async (req, res, next) => {
 
     // Start a transaction
     const result = await db.$transaction(async (prisma) => {
-      // Handle company creation first, only if user has the "ADMIN" role
-      if (companyName && userRole === 'ADMIN') {
+      // Handle company creation first, only if user has the "SUPER_ADMIN" role
+      if (companyName && userRole === 'SUPER_ADMIN') {
         // Ensure that companyName is provided
         if (!companyName) {
           throw new AppError(
@@ -68,8 +70,7 @@ const CreateUser = async (req, res, next) => {
 
         if (existingCompany) {
           return next(
-            // throw new AppError('Company already exists!', 400);
-            new AppError('Company already exists with same name.', 400)
+            new AppError('Company already exists with the same name.', 400)
           );
         }
 
@@ -95,10 +96,7 @@ const CreateUser = async (req, res, next) => {
         });
 
         if (existingUser) {
-          return next(
-            // throw new AppError('Company already exists!', 400);
-            new AppError('User already exists with this email', 400)
-          );
+          return next(new AppError('User already exists with this email', 400));
         }
 
         const existingCompanyEmail = await prisma.company.findUnique({
@@ -127,8 +125,26 @@ const CreateUser = async (req, res, next) => {
 
         // Set the companyId to be assigned to the user later
         companyId = newCompany.id;
+      } else if (userRole === 'ADMIN') {
+        // Ensure ADMIN can only create SUBADMIN or MANAGER users
+        if (!userCompanyId) {
+          throw new AppError(
+            'Unauthorized: ADMIN must be assigned to a company',
+            403
+          );
+        }
+
+        companyId = userCompanyId;
+
+        // Only allow ADMIN to create SUBADMIN or MANAGER
+        if (role && role !== 'SUBADMIN' && role !== 'MANAGER') {
+          throw new AppError(
+            'Unauthorized: ADMIN can only create SUBADMIN or MANAGER users',
+            403
+          );
+        }
       } else if (userRole === 'SUBADMIN') {
-        // Ensure SUBADMIN can only create users for their assigned company
+        // Ensure SUBADMIN can only create MANAGER or SUBADMIN users, but not ADMIN
         if (!userCompanyId) {
           throw new AppError(
             'Unauthorized: SUBADMIN must be assigned to a company',
@@ -138,10 +154,18 @@ const CreateUser = async (req, res, next) => {
 
         companyId = userCompanyId;
 
-        // Only allow SUBADMIN to create users with the "MANAGER" role
-        if (role && role !== 'MANAGER') {
+        // Ensure SUBADMIN can create only SUBADMIN or MANAGER, but NOT ADMIN
+        if (role && role === 'ADMIN') {
           throw new AppError(
-            'Unauthorized: SUBADMIN can only create users with the "MANAGER" role',
+            'Unauthorized: SUBADMIN cannot create ADMIN users',
+            403
+          );
+        }
+
+        // Ensure SUBADMIN can create only SUBADMIN or MANAGER users
+        if (role && role !== 'MANAGER' && role !== 'SUBADMIN') {
+          throw new AppError(
+            'Unauthorized: SUBADMIN can only create SUBADMIN or MANAGER users',
             403
           );
         }
@@ -153,10 +177,7 @@ const CreateUser = async (req, res, next) => {
       });
 
       if (existingUser) {
-        return next(
-          // throw new AppError('Company already exists!', 400);
-          new AppError('User already exists with this email', 400)
-        );
+        return next(new AppError('User already exists with this email', 400));
       }
 
       // Hash the password
@@ -214,13 +235,16 @@ const Login = async (req, res, next) => {
     }
 
     // If user is not Admin, include company details
-    if (user.role !== 'ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       user = await db.user.findFirst({
         where: { email },
         include: {
           company: true,
+          branches: true, // Ensure branches are included if not SUPER_ADMIN
         },
       });
+
+      console.log(user, ' <===');
     }
 
     // Check if password is valid
@@ -229,12 +253,21 @@ const Login = async (req, res, next) => {
       return next(new AppError('Invalid credentials!', 401));
     }
 
+    // Extract the branchId from the first branch in the branches array (if available)
+    const branchId =
+      Array.isArray(user.branches) && user.branches.length > 0
+        ? user.branches[0]?.id
+        : null;
+
+    console.log(branchId, 'is Branch');
+
     // Create JWT token
     const token = jwt.sign(
       {
         userId: user.id,
         role: user.role,
         companyId: user.companyId,
+        branchId: branchId, // Send branchId as part of the token
       },
       process.env.JWT_SECRET
     );
@@ -246,7 +279,8 @@ const Login = async (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        company: user.company, // This will be included only if not Admin
+        company: user.company, // Include company details if not Admin
+        branchId: branchId, // Include branchId
       },
       token,
     });
@@ -264,10 +298,13 @@ const Login = async (req, res, next) => {
 
 const GetAllUser = async (req, res, next) => {
   try {
-    const { role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
-    const { page = 1, limit = 10, searchTerm = '' } = req.query; // Pagination and search parameters
-
-    console.log(req.user);
+    const { role, companyId: userCompanyId } = req.user; // Assumes `req.user` contains the authenticated user's info
+    const {
+      page = 1,
+      limit = 10,
+      searchTerm = '',
+      companyId: queryCompanyId,
+    } = req.query; // Pagination and search parameters
 
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
@@ -283,14 +320,18 @@ const GetAllUser = async (req, res, next) => {
         }
       : {};
 
+    // Initialize the where condition
+    let whereCondition = { ...searchConditions };
+
     switch (role) {
-      case 'ADMIN':
-        // Admin: Can see all users and include company details
+      case 'SUPER_ADMIN':
+        // SUPER_ADMIN: Can view users from all companies, optionally filtered by companyId in the query
+        if (queryCompanyId) {
+          whereCondition.companyId = parseInt(queryCompanyId, 10); // Filter by companyId from query if provided
+        }
+
         users = await db.user.findMany({
-          where: {
-            // Admin can see users in their company
-            ...searchConditions,
-          },
+          where: whereCondition,
           skip: offset,
           take: limitNum,
           include: {
@@ -299,19 +340,23 @@ const GetAllUser = async (req, res, next) => {
         });
 
         totalUsers = await db.user.count({
-          where: {
-            ...searchConditions,
-          },
+          where: whereCondition,
         });
         break;
 
+      case 'ADMIN':
       case 'SUBADMIN':
-        // SUBADMIN: Can see users in their company
+        // ADMIN & SUBADMIN: Can view users in their own company
+        if (!userCompanyId) {
+          return res.status(400).json({
+            error: 'No company associated with the user.',
+          });
+        }
+
+        whereCondition.companyId = userCompanyId; // Restrict users to their own company
+
         users = await db.user.findMany({
-          where: {
-            companyId: companyId, // Filter users by companyId
-            ...searchConditions,
-          },
+          where: whereCondition,
           skip: offset,
           take: limitNum,
           include: {
@@ -320,15 +365,12 @@ const GetAllUser = async (req, res, next) => {
         });
 
         totalUsers = await db.user.count({
-          where: {
-            companyId: companyId, // Count users in their company
-            ...searchConditions,
-          },
+          where: whereCondition,
         });
         break;
 
       case 'MANAGER':
-        // Manager: Not allowed to view users
+        // MANAGER: Not allowed to view users
         return res.status(403).json({
           error: 'You do not have permission to view users.',
         });
@@ -348,8 +390,8 @@ const GetAllUser = async (req, res, next) => {
       limit: limitNum,
     });
   } catch (error) {
-    console.error('Error in getUsers:', error);
-    next(error);
+    console.error('Error in GetAllUser:', error);
+    next(error); // Pass the error to error-handling middleware
   }
 };
 
@@ -385,7 +427,15 @@ const GetLoggedInUser = async (req, res, next) => {
 
 const UpdateUser = async (req, res, next) => {
   const { id } = req.params;
-  const { email, password, name, avatar, role, companyId } = req.body;
+
+  // TODO: handle company profile edit
+  console.log(req.user, 'user token');
+  console.log(id, 'user id');
+
+  const { email, password, name, avatar } = req.body; // Added companyId to the destructuring
+
+  console.log(req.body, 'request body');
+
   try {
     // Validate request body using Zod schema
     UpdateUserSchema.parse(req.body);
@@ -394,6 +444,8 @@ const UpdateUser = async (req, res, next) => {
     const existingUser = await db.user.findUnique({
       where: { id: parseInt(id) },
     });
+
+    console.log(existingUser, 'updated');
 
     if (!existingUser) {
       throw new AppError('User not found!', 404);
@@ -416,18 +468,6 @@ const UpdateUser = async (req, res, next) => {
       hashedPassword = hashSync(password, 10);
     }
 
-    // Check if the provided company exists (optional step if companyId is present)
-    let company = null;
-    if (companyId) {
-      company = await db.companies.findUnique({
-        where: { id: companyId },
-      });
-
-      if (!company) {
-        throw new AppError('Company not found!', 404);
-      }
-    }
-
     // Update the user with the new data
     const updatedUser = await db.user.update({
       where: { id: parseInt(id) },
@@ -436,8 +476,7 @@ const UpdateUser = async (req, res, next) => {
         password: hashedPassword,
         name: name || existingUser.name,
         avatar: avatar || existingUser.avatar,
-        role: role || existingUser.role,
-        companyId: companyId || existingUser.companyId, // Optional company assignment
+        companyId: existingUser.companyId, // Company ID remains unchanged if not provided in the request body
       },
     });
 
@@ -463,6 +502,7 @@ const UpdateUser = async (req, res, next) => {
 // TODO: Delete user api
 const DeleteUser = async (req, res, next) => {
   const { id } = req.params;
+  const { userId, role, companyId } = req.user; // userId is the ID of the logged-in user
 
   try {
     // Find the user to be deleted
@@ -474,7 +514,47 @@ const DeleteUser = async (req, res, next) => {
       throw new AppError('User not found!', 404);
     }
 
-    // Delete the user
+    // Check if the user trying to delete belongs to the same company
+    if (existingUser.companyId !== companyId) {
+      throw new AppError(
+        'You can only delete users from your own company!',
+        403
+      );
+    }
+
+    // Role-based deletion checks
+    // Check if user trying to delete is SUPER_ADMIN
+    if (role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can delete any user, regardless of company
+      // No restrictions for SUPER_ADMIN
+    }
+    // Check if user trying to delete is ADMIN
+    else if (role === 'ADMIN') {
+      // ADMIN cannot delete another ADMIN, including themselves
+      if (existingUser.role === 'ADMIN') {
+        throw new AppError(
+          'ADMIN cannot delete another ADMIN or themselves',
+          403
+        );
+      }
+
+      // ADMIN can only delete SUBADMIN and MANAGER
+      if (existingUser.role !== 'SUBADMIN' && existingUser.role !== 'MANAGER') {
+        throw new AppError(
+          'ADMIN can only delete SUBADMIN and MANAGER users',
+          403
+        );
+      }
+    }
+    // Check if user trying to delete is SUBADMIN
+    else if (role === 'SUBADMIN') {
+      // SUBADMIN can only delete MANAGER users
+      if (existingUser.role !== 'MANAGER') {
+        throw new AppError('SUBADMIN can only delete MANAGER users', 403);
+      }
+    }
+
+    // If the checks pass, delete the user
     await db.user.delete({
       where: { id: parseInt(id) },
     });

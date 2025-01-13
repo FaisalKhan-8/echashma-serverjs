@@ -8,34 +8,35 @@ exports.createPurchase = async (req, res, next) => {
   console.log(req.body);
 
   try {
+    if (!companyId) {
+      throw new AppError('Invalid company. Please authenticate first.', 401)();
+    }
+
     // Validate required fields
     if (
       !purchaseDate ||
       !billNo ||
       !supplierId ||
-      !companyId || // Ensure companyId is validated
       !items ||
       items.length === 0
     ) {
-      return next(
-        new AppError(
-          'Invalid input data. Please provide all required fields.',
-          400
-        )
+      throw new AppError(
+        'Invalid input data. Please provide all required fields.',
+        400
       );
     }
 
     // Check for existing purchase with the same billNo in the same company
     const existingPurchase = await db.purchase.findFirst({
-      where: { billNo, companyId },
+      where: {
+        billNo,
+        companyId,
+      },
     });
-
     if (existingPurchase) {
-      return next(
-        new AppError(
-          'Purchase with this Bill No already exists for this company',
-          400
-        )
+      throw new AppError(
+        'Purchase with this Bill No already exists for this company',
+        400
       );
     }
 
@@ -45,7 +46,7 @@ exports.createPurchase = async (req, res, next) => {
     });
 
     if (!supplier) {
-      return next(new AppError('Invalid supplier', 400));
+      throw new AppError('Invalid supplier', 400);
     }
 
     let totalAmount = 0;
@@ -73,11 +74,9 @@ exports.createPurchase = async (req, res, next) => {
       });
 
       if (!product) {
-        return next(
-          new AppError(
-            `Invalid product ID: ${productId} or product is not associated with the specified company`,
-            400
-          )
+        throw new AppError(
+          `Invalid product ID: ${productId} or product is not associated with the specified company`,
+          400
         );
       }
 
@@ -197,9 +196,7 @@ exports.createPurchase = async (req, res, next) => {
     // Return the newly created purchase
     res.status(201).json({ success: true, data: newPurchase });
   } catch (error) {
-    return next(
-      new AppError(error.message || 'Unable to create purchase', 400)
-    );
+    next(error);
   }
 };
 
@@ -323,10 +320,10 @@ exports.getAllPurchases = async (req, res) => {
   // Determine the company filter based on the user's role
   let companyFilter = {};
 
-  if (role === 'ADMIN') {
+  if (role === 'SUPER_ADMIN') {
     // Admin can view all purchases, no companyId filter needed
     companyFilter = {};
-  } else if (role === 'SUBADMIN' || role === 'MANAGER') {
+  } else if (role === 'ADMIN' || role === 'SUBADMIN' || role === 'MANAGER') {
     if (!companyId) {
       // Ensure companyId exists for SUBADMIN and MANAGER
       return res.status(400).json({

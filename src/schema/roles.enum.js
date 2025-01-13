@@ -1,5 +1,6 @@
 exports.Roles = {
+  SUPERADMIN: 'SUPER_ADMIN',
   ADMIN: 'ADMIN',
-  SUBADMIN: 'SUBADMIN',
+  SUBADMIN: 'SUB_ADMIN',
   MANAGER: 'MANAGER',
 };

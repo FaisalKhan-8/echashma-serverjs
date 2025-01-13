@@ -6,62 +6,98 @@ const { AppError } = require('../errors/AppError');
 // Create a new product
 const createProduct = async (req, res, next) => {
   const { name, code } = req.body;
-  const { companyId } = req.user; // Assuming req.user contains the authenticated user's details
+  const { companyId: userCompanyId, role } = req.user;
+  const { companyId: selectedCompanyId } = req.query;
 
   try {
-    // Check if a product with the same name or code already exists within the same company
-    const existingProduct = await db.product.findFirst({
-      where: {
-        OR: [{ name }, { code }],
-        companyId: companyId, // Ensure the product is being created under the correct company
-      },
-    });
+    let companyId;
 
-    if (existingProduct) {
-      return next(
-        new AppError(
-          'Product with this name or code already exists in this company!',
-          409
-        )
-      );
+    // If the user is SUPER_ADMIN, they can pass the companyId via the query params
+    if (role === 'SUPER_ADMIN') {
+      if (selectedCompanyId) {
+        // If SUPER_ADMIN passes a companyId in the query params, use that
+        companyId = Number(selectedCompanyId); // Ensure companyId is a number
+      } else {
+        // If no companyId is provided by SUPER_ADMIN, return an error
+        throw new AppError(
+          'SUPER_ADMIN must provide a companyId when creating a product.',
+          400
+        );
+      }
+    } else {
+      // For non-SUPER_ADMIN users (like ADMIN), use the companyId from the token
+      if (!userCompanyId) {
+        throw new AppError(
+          'No company associated with the user. Cannot create product.',
+          400
+        );
+      }
+      companyId = userCompanyId;
     }
 
-    // Create the new product and associate it with the provided company
-    const newProduct = await db.product.create({
-      data: {
-        name,
-        code,
-        companyId, // Associate product with the authenticated user's company
+    // Step 1: Check if a product with the same name already exists for the given company
+    const existingProduct = await db.product.findFirst({
+      where: {
+        AND: [{ companyId }, { OR: [{ code }, { name }] }],
       },
     });
 
+    console.log(existingProduct, 'product already');
+
+    if (existingProduct) {
+      if (existingProduct.code === code) {
+        throw new AppError('Product code already exists.', 409);
+      }
+      if (existingProduct.name === name) {
+        throw new AppError('Product name already exists.', 409);
+      }
+    }
+
+    // Step 3: Create the new product for the correct company
+    const newProduct = await db.product.create({
+      data: { name, code, companyId },
+    });
+
+    // Step 4: Respond with the newly created product
     res.status(201).json(newProduct);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Unable to create product' });
+    next(error);
   }
 };
 
 // Get all products with pagination, search, and associated branches
 const getAllProducts = async (req, res) => {
-  const { userId, companyId, role } = req.user; // Get userId, companyId, and role from the authenticated user
-  const { page = 1, limit = 10, search = '' } = req.query;
+  const { userId, companyId: userCompanyId, role } = req.user; // Get userId, companyId, and role from the authenticated user
+  const {
+    page = 1,
+    limit = 10,
+    search = '',
+    companyId: queryCompanyId,
+  } = req.query; // Extract query params
   const pageNumber = parseInt(page);
   const pageLimit = parseInt(limit);
 
   try {
+    // Initialize the 'where' clause for filtering by product name
     let whereClause = {
       name: {
         contains: search, // Search by product name
+        mode: 'insensitive', // Case-insensitive search
       },
     };
 
-    // If the user is not an admin, filter by userId and companyId
-    if (role !== 'ADMIN') {
-      whereClause = {
-        ...whereClause,
-        companyId, // Only fetch products for the user's company
-      };
+    // If the user is a SUPER_ADMIN, they can filter by companyId from the query
+    if (role === 'SUPER_ADMIN') {
+      if (queryCompanyId) {
+        whereClause.companyId = parseInt(queryCompanyId, 10); // Filter products by companyId from query
+      }
+    } else {
+      // For other roles, restrict access to the user's company
+      if (!userCompanyId) {
+        throw new Error('No company associated with the user.');
+      }
+      whereClause.companyId = userCompanyId; // Filter products by the user's companyId
     }
 
     // Fetch products based on the dynamically constructed whereClause
@@ -69,6 +105,9 @@ const getAllProducts = async (req, res) => {
       where: whereClause,
       skip: (pageNumber - 1) * pageLimit,
       take: pageLimit,
+      include: {
+        Company: true, // Include company information in the response
+      },
     });
 
     // Get total products count for pagination

@@ -22,6 +22,7 @@ const authenticateUser = (req, res, next) => {
       userId: decoded.userId, // Changed from id to userId to match your GetLoggedInUser logic
       role: decoded.role,
       companyId: decoded.companyId,
+      branchId: decoded.branchId,
       // Add any other fields you need from the token, such as email, name, etc.
     };
 

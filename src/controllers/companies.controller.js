@@ -163,7 +163,6 @@ async function getAllCompanies(req, res, next) {
   const { page = 1, pageSize = 10, searchTerm = '' } = req.query;
   const pageSizeNumber = parseInt(pageSize, 10) || 10;
   const pageNumber = parseInt(page, 10) || 1;
-  const userId = req.user.id;
   const userRole = req.user.role;
   const userCompanyId = req.user.companyId; // The company ID assigned to the user (for SUBADMIN and MANAGER)
 
@@ -176,10 +175,20 @@ async function getAllCompanies(req, res, next) {
 
     // Role-based filtering
     switch (userRole) {
-      case 'ADMIN':
+      case 'SUPER_ADMIN':
         // Admin sees all companies, no additional filters required
         break;
 
+      case 'ADMIN':
+        // Subadmin can only see their assigned company
+        if (!userCompanyId) {
+          throw new Error('No company assigned to this subadmin');
+        }
+        whereCondition = {
+          ...whereCondition,
+          id: userCompanyId, // Filter by the company assigned to the subadmin
+        };
+        break;
       case 'SUBADMIN':
         // Subadmin can only see their assigned company
         if (!userCompanyId) {
@@ -232,6 +241,48 @@ async function getAllCompanies(req, res, next) {
       },
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+async function getCompanyById(req, res, next) {
+  try {
+    const { companyId } = req.params; // Extract companyId from the route parameters
+    const { role } = req.user; // Get the role from the authenticated user
+
+    // Validate companyId
+    if (!companyId || isNaN(companyId)) {
+      throw new AppError('Invalid companyId provided', 400);
+    }
+
+    // Validate role: Only SUPER_ADMIN, ADMIN, and SUB_ADMIN are allowed
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'SUBADMIN'];
+    if (!allowedRoles.includes(role)) {
+      throw new AppError(
+        'Forbidden: You do not have permission to access this resource',
+        403
+      );
+    }
+
+    // Fetch the company based on companyId
+    const company = await db.company.findUnique({
+      where: { id: Number(companyId) }, // Ensure companyId is treated as a number
+      include: {
+        users: true, // Include related users
+        branches: true, // Include related branches
+      },
+    });
+
+    // If no company is found, return a 404 error
+    if (!company) {
+      throw new AppError('Company not found', 404);
+    }
+
+    // Return the company and related data
+    return res.status(200).json({ company });
+  } catch (error) {
+    // Handle unexpected errors
+    console.error(error);
     next(error);
   }
 }
@@ -360,6 +411,7 @@ module.exports = {
   createCompany,
   upload,
   getAllCompanies,
+  getCompanyById,
   updateCompany,
   deleteCompany,
 };

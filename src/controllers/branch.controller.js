@@ -10,16 +10,10 @@ const createBranch = async (req, res, next) => {
   try {
     // Validate request body
     const parsedBody = CreateBranchSchema.parse(req.body);
+    const { companyId, role } = req.user;
 
-    const {
-      branchName,
-      address,
-      contactPerson,
-      phone,
-      email,
-      companyId,
-      userIds,
-    } = parsedBody;
+    const { branchName, address, contactPerson, phone, email, userIds } =
+      parsedBody;
 
     // Check if the company exists if companyId is provided
     if (companyId) {
@@ -108,14 +102,29 @@ const createBranch = async (req, res, next) => {
       });
     }
 
+    // Handle Prisma error for unique constraint violation (P2002)
+    if (error.code === 'P2002') {
+      return next(
+        new AppError(
+          'Branch with this name already exists in this company!',
+          409
+        )
+      );
+    }
+
     next(error);
   }
 };
 
 const getBranches = async (req, res, next) => {
   try {
-    const { userId, role, companyId } = req.user; // Assumes `req.user` contains the authenticated user's info
-    const { page = 1, limit = 10, searchTerm = '' } = req.query; // Pagination and search parameters
+    const { userId, role, companyId } = req.user; // Destructuring user data from req.user
+    const {
+      page = 1,
+      limit = 10,
+      searchTerm = '',
+      companyId: queryCompanyId,
+    } = req.query; // Destructuring query params and checking for companyId in query
 
     console.log(req.user);
 
@@ -132,51 +141,113 @@ const getBranches = async (req, res, next) => {
         }
       : {};
 
+    // Convert queryCompanyId to an integer if provided
+    const parsedCompanyId = queryCompanyId
+      ? parseInt(queryCompanyId, 10)
+      : undefined;
+
     switch (role) {
-      case 'ADMIN':
-        // Admin: Can see all branches, no companyId filter needed
+      case 'SUPER_ADMIN':
+        // SUPER_ADMIN: Can see all branches, but if companyId is provided in query, show branches of that company
+        const superAdminCompanyId = parsedCompanyId;
+
         branches = await db.branch.findMany({
           where: {
-            ...searchConditions,
+            companyId: superAdminCompanyId, // If companyId is provided in query, filter by it, otherwise show branches from all companies
+            ...searchConditions, // Apply search term if present
           },
           skip: offset,
           take: limitNum,
           include: {
             company: true, // Include company details for branches
+            users: true, // Include users assigned to branches
           },
         });
 
         totalBranches = await db.branch.count({
           where: {
-            ...searchConditions,
+            companyId: superAdminCompanyId, // Count branches by companyId, if specified
+            ...searchConditions, // Apply search term if present
           },
         });
         break;
 
-      case 'SUBADMIN':
-        // Subadmin: Can see branches in their company, filter by companyId
+      case 'ADMIN':
+        // ADMIN: Can see all branches within their own company, filter by companyId
+        if (!companyId) {
+          return res.status(400).json({
+            error: 'Company ID is required for ADMIN role.',
+          });
+        }
+
         branches = await db.branch.findMany({
           where: {
             companyId: companyId, // Filter by companyId
-            ...searchConditions,
+            ...searchConditions, // Apply search term if present
           },
           skip: offset,
           take: limitNum,
           include: {
             company: true, // Include company details for branches
+            users: true,
+          },
+        });
+
+        totalBranches = await db.branch.count({
+          where: {
+            companyId: companyId, // Count branches within their company
+            ...searchConditions, // Apply search term if present
+          },
+        });
+        break;
+
+      case 'SUBADMIN':
+        // SUBADMIN: Can only see branches they are assigned to within their company
+        if (!companyId) {
+          return res.status(400).json({
+            error: 'Company ID is required for SUBADMIN role.',
+          });
+        }
+
+        branches = await db.branch.findMany({
+          where: {
+            companyId: companyId, // Filter by companyId
+            subadmins: {
+              some: {
+                id: userId, // Only branches assigned to this subadmin
+              },
+            },
+            ...searchConditions, // Apply search term if present
+          },
+          skip: offset,
+          take: limitNum,
+          include: {
+            company: true, // Include company details for branches
+            users: true,
           },
         });
 
         totalBranches = await db.branch.count({
           where: {
             companyId: companyId, // Count branches in their company
-            ...searchConditions,
+            subadmins: {
+              some: {
+                id: userId, // Ensure the subadmin is assigned to this branch
+              },
+            },
+            ...searchConditions, // Apply search term if present
           },
         });
         break;
 
       case 'MANAGER':
-        // Manager: Can only see branches assigned to them in their company
+        // MANAGER: Can only see branches they are assigned to within their company
+        if (!companyId) {
+          return res.status(400).json({
+            error: 'Company ID is required for MANAGER role.',
+          });
+        }
+
         branches = await db.branch.findMany({
           where: {
             companyId: companyId, // Filter by companyId
@@ -185,12 +256,13 @@ const getBranches = async (req, res, next) => {
                 id: userId, // Only branches assigned to this manager
               },
             },
-            ...searchConditions,
+            ...searchConditions, // Apply search term if present
           },
           skip: offset,
           take: limitNum,
           include: {
             company: true, // Include company details for branches
+            users: true,
           },
         });
 
@@ -199,10 +271,10 @@ const getBranches = async (req, res, next) => {
             companyId: companyId, // Count branches in their company
             managers: {
               some: {
-                id: userId, // Ensure the branch is assigned to this manager
+                id: userId, // Ensure the manager is assigned to this branch
               },
             },
-            ...searchConditions,
+            ...searchConditions, // Apply search term if present
           },
         });
         break;
@@ -226,6 +298,48 @@ const getBranches = async (req, res, next) => {
     next(error); // Pass the error to the error handling middleware
   }
 };
+
+async function getBranchById(req, res, next) {
+  try {
+    const { branchId } = req.params; // Extract branchId from the route parameters
+    const { role } = req.user; // Get the role from the authenticated user
+
+    // Validate branchId
+    if (!branchId || isNaN(branchId)) {
+      throw new AppError('Invalid companyId provided', 400);
+    }
+
+    // Validate role: Only SUPER_ADMIN, ADMIN, and SUB_ADMIN are allowed
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'SUBADMIN', 'MANAGER'];
+    if (!allowedRoles.includes(role)) {
+      throw new AppError(
+        'Forbidden: You do not have permission to access this resource',
+        403
+      );
+    }
+
+    // Fetch the branch based on branchId
+    const branch = await db.branch.findUnique({
+      where: { id: Number(branchId) }, // Ensure branchId is treated as a number
+      include: {
+        users: true,
+        company: true,
+      },
+    });
+
+    // If no branch is found, return a 404 error
+    if (!branch) {
+      throw new AppError('Branch not found', 404);
+    }
+
+    // Return the branch and related data
+    return res.status(200).json({ branch });
+  } catch (error) {
+    // Handle unexpected errors
+    console.error(error);
+    next(error);
+  }
+}
 
 const updateBranch = async (req, res, next) => {
   try {
@@ -305,6 +419,7 @@ const deleteBranch = async (req, res, next) => {
 module.exports = {
   createBranch,
   getBranches,
+  getBranchById,
   updateBranch,
   deleteBranch,
 };
