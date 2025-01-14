@@ -53,14 +53,16 @@ const createCustomerInvoice = async (req, res, next) => {
     let branchId;
     if (role === 'MANAGER') {
       // For MANAGER, use the branchId from the token (user's associated branch)
-      branchId = userBranchId;
+      branchId = parseInt(userBranchId, 10);
     } else if (
       role === 'SUPER_ADMIN' ||
       role === 'ADMIN' ||
       role === 'SUBADMIN'
     ) {
-      // For SUPER_ADMIN, ADMIN, and SUBADMIN, use branchId from query parameters
-      branchId = queryBranchId;
+      if (!queryBranchId) {
+        return res.status(400).json({ message: 'Branch ID is required' });
+      }
+      branchId = parseInt(queryBranchId, 10) || undefined;
     } else {
       // If the role is unrecognized, return an error
       return res.status(403).json({ message: 'Unauthorized role' });
@@ -254,19 +256,40 @@ const createCustomerInvoice = async (req, res, next) => {
 
 async function getAllCustomerInvoices(req, res, next) {
   try {
-    // Get companyId and role from the authenticated user
-    const { companyId, role } = req.user;
+    // Get companyId, branchId from the token and role from the authenticated user
+    const { companyId, branchId: userBranchId, role } = req.user;
+    const { branchId: queryBranchId } = req.query;
 
     console.log('Role:', role);
 
-    // Determine the company filter based on the role
+    let branchId;
     let companyFilter = {};
 
-    if (role === 'ADMIN') {
-      // Admin can view all invoices, no companyId filter needed
-      companyFilter = {};
-    } else if (role === 'SUBADMIN' || role === 'MANAGER') {
-      // Subadmin and Manager need a companyId to filter data
+    // Determine the branchId based on role
+    if (role === 'SUPER_ADMIN') {
+      // For SUPER_ADMIN and ADMIN, use branchId from query
+      branchId = queryBranchId ? parseInt(queryBranchId, 10) : undefined;
+      if (isNaN(branchId) && queryBranchId) {
+        return next(new AppError('Invalid branchId provided', 400));
+      }
+    } else if (role === 'SUBADMIN' || role === 'ADMIN') {
+      // For SUBADMIN and ADMIN, check if branchId exists in query, else fallback to token (userBranchId)
+      branchId = queryBranchId ? parseInt(queryBranchId, 10) : undefined;
+      if (isNaN(branchId) && queryBranchId) {
+        return next(new AppError('Invalid branchId provided', 400));
+      }
+      if (!companyId) {
+        return next(
+          new AppError('Company ID is required to fetch invoices', 400)
+        );
+      }
+      companyFilter = { companyId }; // Restrict to the user's company
+    } else if (role === 'MANAGER') {
+      // For MANAGER, always use branchId from token
+      branchId = userBranchId ? parseInt(userBranchId, 10) : undefined;
+      if (isNaN(branchId) && userBranchId) {
+        return next(new AppError('Invalid branchId provided', 400));
+      }
       if (!companyId) {
         return next(
           new AppError('Company ID is required to fetch invoices', 400)
@@ -289,11 +312,13 @@ async function getAllCustomerInvoices(req, res, next) {
     const skip = (page - 1) * limit;
 
     console.log('Company Filter:', companyFilter);
+    console.log('Branch ID:', branchId);
 
     // Fetch invoices with pagination and optional search
     const invoices = await db.customerInvoice.findMany({
       where: {
         ...companyFilter, // Apply the role-based company filter
+        branchId: branchId || undefined, // Apply branchId if available
         OR: [
           {
             orderNo: {
@@ -320,6 +345,7 @@ async function getAllCustomerInvoices(req, res, next) {
     const totalInvoices = await db.customerInvoice.count({
       where: {
         ...companyFilter, // Apply the same company filter for counting
+        branchId: branchId || undefined, // Apply branchId if available
         OR: [
           {
             orderNo: {

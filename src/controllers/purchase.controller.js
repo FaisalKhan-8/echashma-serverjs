@@ -301,8 +301,26 @@ exports.updatePurchase = async (req, res) => {
 
 // Get all purchases with pagination and search
 exports.getAllPurchases = async (req, res) => {
-  const { companyId, role } = req.user; // Extract companyId and role from the authenticated user
-  const { page = 1, limit = 10, search = '' } = req.query;
+  let { companyId } = req.user; // Change `const` to `let`
+  const { role } = req.user;
+  const {
+    page = 1,
+    limit = 10,
+    search = '',
+    companyId: queryCompanyId,
+  } = req.query;
+
+  // If the role is SUPER_ADMIN, allow companyId from the query string
+  if (role === 'SUPER_ADMIN') {
+    // If no companyId is passed in the query, don't apply any filter for companyId
+    companyId = parseInt(queryCompanyId, 10) || undefined;
+  } else if (role !== 'SUPER_ADMIN' && !companyId) {
+    // For other roles, ensure companyId exists in the token
+    return res.status(400).json({
+      status: 'error',
+      message: 'Company ID is required to fetch invoices',
+    });
+  }
 
   // Parse pagination values with fallback defaults
   const pageNumber = Math.max(1, parseInt(page, 10) || 1); // Ensure page is at least 1
@@ -320,24 +338,12 @@ exports.getAllPurchases = async (req, res) => {
   // Determine the company filter based on the user's role
   let companyFilter = {};
 
-  if (role === 'SUPER_ADMIN') {
-    // Admin can view all purchases, no companyId filter needed
-    companyFilter = {};
-  } else if (role === 'ADMIN' || role === 'SUBADMIN' || role === 'MANAGER') {
-    if (!companyId) {
-      // Ensure companyId exists for SUBADMIN and MANAGER
-      return res.status(400).json({
-        status: 'error',
-        message: 'Company ID is required to fetch invoices',
-      });
-    }
-    companyFilter = { companyId }; // Restrict to the user's companyId
-  } else {
-    // Return error for unknown or unauthorized roles
-    return res.status(403).json({
-      status: 'error',
-      message: 'You do not have permission to view purchases',
-    });
+  if (role === 'SUPER_ADMIN' && companyId) {
+    // If SUPER_ADMIN and companyId is provided, apply filter
+    companyFilter.companyId = companyId;
+  } else if (role !== 'SUPER_ADMIN') {
+    // For non-SUPER_ADMIN roles, apply companyId from token
+    companyFilter.companyId = companyId;
   }
 
   try {
@@ -354,7 +360,6 @@ exports.getAllPurchases = async (req, res) => {
               items: {
                 some: {
                   product: {
-                    // Change `Product` to `product`
                     name: { contains: search, mode: 'insensitive' }, // Case-insensitive search by product name
                   },
                 },
@@ -367,17 +372,17 @@ exports.getAllPurchases = async (req, res) => {
         include: {
           items: {
             include: {
-              product: true, // Change `Product` to `product`
-              Brand: true, // Include related Brand model
-              FrameType: true, // Include related FrameType model
-              ShapeType: true, // Include related ShapeType model
+              product: true,
+              Brand: true,
+              FrameType: true,
+              ShapeType: true,
             },
           },
-          supplier: true, // Include related Supplier model
-          Company: true, // Include related Company model
+          supplier: true,
+          Company: true,
         },
         orderBy: {
-          createdAt: 'desc', // Order by most recent first
+          createdAt: 'desc',
         },
       }),
       db.purchase.count({
@@ -389,7 +394,6 @@ exports.getAllPurchases = async (req, res) => {
               items: {
                 some: {
                   product: {
-                    // Change `Product` to `product`
                     name: { contains: search, mode: 'insensitive' },
                   },
                 },
