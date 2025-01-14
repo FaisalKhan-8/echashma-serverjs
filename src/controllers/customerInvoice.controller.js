@@ -318,7 +318,7 @@ async function getAllCustomerInvoices(req, res, next) {
     const invoices = await db.customerInvoice.findMany({
       where: {
         ...companyFilter, // Apply the role-based company filter
-        branchId: branchId || undefined, // Apply branchId if available
+        ...(branchId && { branchId }), // Apply branchId if available
         OR: [
           {
             orderNo: {
