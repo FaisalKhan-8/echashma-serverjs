@@ -77,32 +77,42 @@ const getAllBrand = async (req, res) => {
   const take = parseInt(limit);
 
   try {
-    let whereConditions = {
-      name: {
-        contains: search, // Search brands by name
-        // Add 'mode: 'insensitive'' for case insensitive search if using PostgreSQL
-      },
+    // Initialize whereClause
+    let whereClause = {
+      OR: [
+        {
+          code: {
+            contains: search, // Search by code
+          },
+        },
+        {
+          name: {
+            contains: search, // Search by name
+          },
+        },
+      ],
     };
 
     if (role === 'SUPER_ADMIN') {
       // If the role is SUPER_ADMIN, use companyId from query if present
       if (queryCompanyId) {
-        whereConditions.companyId = parseInt(queryCompanyId, 10); // Filter brands by companyId from query
+        whereClause.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter brands by companyId from query
       }
     } else {
       // If the role is not SUPER_ADMIN, filter by companyId from user token
-      whereConditions.companyId = userCompanyId; // Use the companyId from the user token
+      whereClause.companyId = parseInt(userCompanyId, 10); // Use the companyId from the user token
     }
 
+    // Fetch brands with pagination and filters
     const Brands = await db.brands.findMany({
-      where: whereConditions,
+      where: whereClause,
       skip: skip,
       take: take,
     });
 
     // Get the total count of brands for pagination
     const totalCount = await db.brands.count({
-      where: whereConditions,
+      where: whereClause,
     });
 
     res.status(200).json({

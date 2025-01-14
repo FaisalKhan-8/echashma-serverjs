@@ -87,7 +87,7 @@ const getAllCoatingTypes = async (req, res) => {
     if (role === 'SUPER_ADMIN') {
       // If the role is SUPER_ADMIN, use companyId from query if present
       if (queryCompanyId) {
-        whereConditions.companyId = parseInt(queryCompanyId, 10); // Filter coating types by companyId from query
+        whereConditions.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter coating types by companyId from query
       }
     } else {
       // If the role is not SUPER_ADMIN, filter by companyId from user token

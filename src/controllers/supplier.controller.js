@@ -102,7 +102,7 @@ const getAllSuppliers = async (req, res) => {
     if (role === 'SUPER_ADMIN') {
       // If companyId is provided in the query, use it, else don't filter by companyId
       if (queryCompanyId) {
-        whereCondition.companyId = parseInt(queryCompanyId, 10);
+        whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined;
       }
       // If no companyId is provided, don't filter by companyId
     }

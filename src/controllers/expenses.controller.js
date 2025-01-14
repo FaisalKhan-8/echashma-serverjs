@@ -3,8 +3,15 @@ const db = require('../utils/db.config');
 
 // Function to get all expenses with pagination and search
 const getAllExpenses = async (req, res, next) => {
-  const { role, companyId: userCompanyId } = req.user; // Extract role and companyId from user token
-  const { page = 1, limit = 10, search = '' } = req.query;
+  const { role, companyId: userCompanyId } = req.user;
+  const {
+    page = 1,
+    limit = 10,
+    search = '',
+    companyId: queryCompanyId,
+  } = req.query;
+
+  console.log(req.query, 'Queryyyyyyyyy');
 
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
@@ -17,8 +24,11 @@ const getAllExpenses = async (req, res, next) => {
       },
     };
 
-    if (role !== 'SUPER_ADMIN') {
-      // For non-SUPER_ADMIN roles, restrict the expenses to the user's companyId
+    // Check if queryCompanyId is provided
+    if (queryCompanyId) {
+      whereCondition.companyId = queryCompanyId || undefined;
+    } else if (role !== 'SUPER_ADMIN') {
+      // For non-SUPER_ADMIN roles, use the companyId from the token
       if (!userCompanyId) {
         throw new AppError('No company associated with the user.', 400);
       }

@@ -201,101 +201,179 @@ exports.createPurchase = async (req, res, next) => {
 };
 
 // Update a purchase with GST and discount calculations
-// Update Purchase
-exports.updatePurchase = async (req, res) => {
+exports.updatePurchase = async (req, res, next) => {
   const { id } = req.params; // Extract purchase ID from the URL parameters
-  const { purchaseDate, billNo, supplierId, items } = req.body; // Extract necessary fields from the request body
+  const { purchaseDate, billNo, supplierId, gstStatus, items } = req.body;
+  const { companyId } = req.user; // Using companyId from the authenticated user
 
-  // Build the update data object dynamically
-  const updateData = {};
-
-  // Conditionally add each field if it is present in the request
-  if (purchaseDate) {
-    updateData.purchaseDate = new Date(purchaseDate);
-  }
-  if (billNo) {
-    updateData.billNo = billNo;
-  }
-  if (supplierId) {
-    updateData.supplierId = supplierId;
-  }
-
-  let totalAmount = 0;
-  let totalCGST = 0;
-  let totalSGST = 0;
-  let netTotal = 0;
-
-  if (Array.isArray(items) && items.length > 0) {
-    const purchaseItemsData = items.map((item) => {
-      const {
-        productId,
-        quantity,
-        rate,
-        discount = 0,
-        modalNo,
-        frameTypeId,
-        shapeId,
-        brandId,
-      } = item;
-
-      // Calculate price details
-      const {
-        totalItemAmount,
-        discountAmount,
-        amountAfterDiscount,
-        cgst,
-        sgst,
-        totalWithGST,
-      } = calculatePriceDetails(rate, quantity, discount);
-
-      totalAmount += totalItemAmount;
-      totalCGST += cgst;
-      totalSGST += sgst;
-      netTotal += totalWithGST;
-
-      return {
-        productId,
-        quantity,
-        rate,
-        discount,
-        amount: amountAfterDiscount,
-        cgst,
-        sgst,
-        modalNo,
-        frameTypeId,
-        shapeId,
-        brandId,
-      };
-    });
-
-    const roundOff = Math.round(netTotal) - netTotal;
-    updateData.totalAmount = totalAmount;
-    updateData.totalCGST = totalCGST;
-    updateData.totalSGST = totalSGST;
-    updateData.netTotal = netTotal + roundOff;
-    updateData.items = {
-      deleteMany: {}, // Remove existing items before updating
-      create: purchaseItemsData, // Add new items
-    };
-  }
+  console.log(req.body);
 
   try {
-    // Start transaction to ensure atomicity for delete and update operations
-    const purchase = await db.$transaction(async (prisma) => {
-      // Update the purchase record
-      const updatedPurchase = await prisma.purchase.update({
+    if (!companyId) {
+      throw new AppError('Invalid company. Please authenticate first.', 401);
+    }
+
+    // Validate the purchase record
+    const existingPurchase = await db.purchase.findFirst({
+      where: { id: parseInt(id), companyId },
+      include: { items: true },
+    });
+
+    if (!existingPurchase) {
+      throw new AppError('Purchase not found', 404);
+    }
+
+    let totalAmount = 0;
+    let totalCGST = 0;
+    let totalSGST = 0;
+    let netTotal = 0;
+
+    // Build the update data dynamically
+    const updateData = {};
+    if (purchaseDate) updateData.purchaseDate = new Date(purchaseDate);
+    if (billNo) updateData.billNo = billNo;
+    if (supplierId) updateData.supplierId = supplierId;
+
+    const updatedItems = [];
+    if (Array.isArray(items) && items.length > 0) {
+      // Reverse the inventory impact of the existing purchase
+      const reverseInventoryPromises = existingPurchase.items.map(
+        async (item) => {
+          const { productId, quantity, frameTypeId, shapeTypeId, brandId } =
+            item;
+
+          // Update inventory to deduct the previously added stock
+          const inventory = await db.inventory.findFirst({
+            where: { productId, frameTypeId, shapeTypeId, brandId, companyId },
+          });
+
+          if (inventory) {
+            return db.inventory.update({
+              where: { id: inventory.id },
+              data: { stock: { decrement: quantity } },
+            });
+          }
+        }
+      );
+
+      await Promise.all(reverseInventoryPromises);
+
+      // Process and add new items
+      for (const item of items) {
+        const {
+          productId,
+          quantity,
+          rate,
+          discount = 0,
+          frameTypeId,
+          shapeId,
+          brandId,
+        } = item;
+
+        // Validate product
+        const product = await db.product.findFirst({
+          where: { id: productId, companyId },
+        });
+
+        if (!product) {
+          throw new AppError(
+            `Invalid product ID: ${productId} or product is not associated with the specified company`,
+            400
+          );
+        }
+
+        const totalItemAmount = rate * quantity;
+        const discountAmount = totalItemAmount * (discount / 100);
+        const amountAfterDiscount = totalItemAmount - discountAmount;
+
+        let cgst = 0;
+        let sgst = 0;
+        let totalWithGST = amountAfterDiscount;
+
+        // If GST is enabled, calculate CGST and SGST
+        if (gstStatus) {
+          cgst = amountAfterDiscount * 0.09; // Assuming 9% CGST
+          sgst = amountAfterDiscount * 0.09; // Assuming 9% SGST
+          totalWithGST = amountAfterDiscount + cgst + sgst;
+        }
+
+        totalAmount += totalItemAmount;
+        totalCGST += cgst;
+        totalSGST += sgst;
+        netTotal += totalWithGST;
+
+        updatedItems.push({
+          productId,
+          quantity,
+          rate,
+          discount,
+          amount: amountAfterDiscount,
+          cgst,
+          sgst,
+          modalNo: null,
+          frameTypeId,
+          shapeTypeId: shapeId,
+          brandId,
+        });
+      }
+
+      const roundOff = Math.round(netTotal) - netTotal;
+
+      updateData.totalAmount = totalAmount;
+      updateData.totalCGST = gstStatus ? totalCGST : 0;
+      updateData.totalSGST = gstStatus ? totalSGST : 0;
+      updateData.netTotal = netTotal + roundOff;
+      updateData.items = {
+        deleteMany: {}, // Remove existing items before updating
+        create: updatedItems,
+      };
+    }
+
+    // Perform update and inventory adjustment in a transaction
+    const updatedPurchase = await db.$transaction(async (prisma) => {
+      const purchase = await prisma.purchase.update({
         where: { id: parseInt(id) },
         data: updateData,
         include: { items: true },
       });
 
-      return updatedPurchase;
+      // Update inventory with new items
+      const inventoryPromises = updatedItems.map(async (item) => {
+        const { productId, quantity, frameTypeId, shapeTypeId, brandId } = item;
+
+        const inventory = await prisma.inventory.findFirst({
+          where: { productId, frameTypeId, shapeTypeId, brandId, companyId },
+        });
+
+        if (inventory) {
+          // Increment the stock if inventory exists
+          return prisma.inventory.update({
+            where: { id: inventory.id },
+            data: { stock: { increment: quantity } },
+          });
+        } else {
+          // Create a new inventory record if it does not exist
+          return prisma.inventory.create({
+            data: {
+              productId,
+              frameTypeId,
+              shapeTypeId,
+              brandId,
+              companyId,
+              stock: quantity,
+            },
+          });
+        }
+      });
+
+      await Promise.all(inventoryPromises);
+
+      return purchase;
     });
 
-    res.status(200).json({ success: true, data: purchase }); // Send the updated purchase data
+    res.status(200).json({ success: true, data: updatedPurchase });
   } catch (error) {
-    console.error('Error updating purchase:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    next(error);
   }
 };
 

@@ -164,73 +164,48 @@ async function getAllCompanies(req, res, next) {
   const pageSizeNumber = parseInt(pageSize, 10) || 10;
   const pageNumber = parseInt(page, 10) || 1;
   const userRole = req.user.role;
-  const userCompanyId = req.user.companyId; // The company ID assigned to the user (for SUBADMIN and MANAGER)
+  const userCompanyId = req.user.companyId;
 
   try {
     let whereCondition = {
       companyName: {
-        contains: searchTerm, // Search companies by name
+        contains: searchTerm,
       },
     };
 
-    // Role-based filtering
     switch (userRole) {
       case 'SUPER_ADMIN':
-        // Admin sees all companies, no additional filters required
         break;
 
       case 'ADMIN':
-        // Subadmin can only see their assigned company
-        if (!userCompanyId) {
-          throw new Error('No company assigned to this subadmin');
-        }
-        whereCondition = {
-          ...whereCondition,
-          id: userCompanyId, // Filter by the company assigned to the subadmin
-        };
-        break;
       case 'SUBADMIN':
-        // Subadmin can only see their assigned company
-        if (!userCompanyId) {
-          throw new Error('No company assigned to this subadmin');
-        }
-        whereCondition = {
-          ...whereCondition,
-          id: userCompanyId, // Filter by the company assigned to the subadmin
-        };
-        break;
-
       case 'MANAGER':
-        // Manager can only see the company they are part of
         if (!userCompanyId) {
-          throw new Error('No company assigned to this manager');
+          throw new AppError(
+            `No company assigned to this ${userRole.toLowerCase()}`,
+            401
+          );
         }
-        whereCondition = {
-          ...whereCondition,
-          id: userCompanyId, // Filter by the manager's assigned company
-        };
+        whereCondition = { ...whereCondition, id: userCompanyId };
         break;
 
       default:
-        throw new Error('Invalid user role');
+        throw new AppError('Invalid user role', 401);
     }
 
-    // Count the total records matching the conditions
-    const totalRecords = await db.company.count({
-      where: whereCondition,
-    });
+    const totalRecords = await db.company.count({ where: whereCondition });
 
-    // Fetch paginated companies with associated users
     const companies = await db.company.findMany({
       where: whereCondition,
-      include: {
-        users: true, // Include users related to the company
-      },
+      include: { users: true },
       skip: (pageNumber - 1) * pageSizeNumber,
       take: pageSizeNumber,
     });
 
-    // Respond with the companies and pagination data
+    if (companies.length === 0) {
+      throw new AppError('No companies found', 404);
+    }
+
     res.json({
       companies,
       pagination: {
@@ -241,7 +216,20 @@ async function getAllCompanies(req, res, next) {
       },
     });
   } catch (error) {
-    next(error);
+    // Error handling middleware
+    if (error.isOperational) {
+      res.status(error.statusCode).json({
+        status: 'error',
+        message: error.message,
+      });
+    } else {
+      console.error(error); // Log the error details for debugging
+      res.status(500).json({
+        status: 'error',
+        message: 'Internal Server Error',
+      });
+    }
+    next(error); // Pass the error to the next middleware
   }
 }
 

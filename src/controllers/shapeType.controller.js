@@ -99,7 +99,7 @@ const getAllShapeTypes = async (req, res) => {
     // If the user is a SUPER_ADMIN, allow filtering by companyId from the query
     if (role === 'SUPER_ADMIN') {
       if (queryCompanyId) {
-        whereClause.companyId = parseInt(queryCompanyId, 10); // Filter by companyId from query if provided
+        whereClause.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter by companyId from query if provided
       }
     } else {
       // For non-SUPER_ADMIN roles, restrict access to the user's companyId

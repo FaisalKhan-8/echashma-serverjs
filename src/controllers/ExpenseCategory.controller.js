@@ -77,7 +77,7 @@ const getExpenseCategories = async (req, res, next) => {
     if (role === 'SUPER_ADMIN') {
       // For SUPER_ADMIN, check if companyId is provided in the query
       if (queryCompanyId) {
-        whereCondition.companyId = parseInt(queryCompanyId, 10); // Filter categories by companyId from query
+        whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter categories by companyId from query
       }
     } else {
       // For non-SUPER_ADMIN roles, restrict categories to the user's companyId

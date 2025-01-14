@@ -90,7 +90,7 @@ const getAllProducts = async (req, res) => {
     // If the user is a SUPER_ADMIN, they can filter by companyId from the query
     if (role === 'SUPER_ADMIN') {
       if (queryCompanyId) {
-        whereClause.companyId = parseInt(queryCompanyId, 10); // Filter products by companyId from query
+        whereClause.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter products by companyId from query
       }
     } else {
       // For other roles, restrict access to the user's company

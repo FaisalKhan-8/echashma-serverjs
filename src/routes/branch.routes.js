@@ -15,7 +15,7 @@ const branchRoutes = Router();
 branchRoutes.post('/createBranch', authenticateUser, createBranch);
 branchRoutes.get('/getBranch', authenticateUser, getBranches);
 branchRoutes.get('/getBranch/:branchId', authenticateUser, getBranchById);
-branchRoutes.put('/update/:id', authorizeAdmin, updateBranch);
-branchRoutes.delete('/deleteBranch/:id', authorizeAdmin, deleteBranch);
+branchRoutes.put('/update/:id', authenticateUser, updateBranch);
+branchRoutes.delete('/deleteBranch/:id', authenticateUser, deleteBranch);
 
 module.exports = branchRoutes;

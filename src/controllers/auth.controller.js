@@ -327,7 +327,7 @@ const GetAllUser = async (req, res, next) => {
       case 'SUPER_ADMIN':
         // SUPER_ADMIN: Can view users from all companies, optionally filtered by companyId in the query
         if (queryCompanyId) {
-          whereCondition.companyId = parseInt(queryCompanyId, 10); // Filter by companyId from query if provided
+          whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter by companyId from query if provided
         }
 
         users = await db.user.findMany({
@@ -603,7 +603,7 @@ const CreateFirstAdmin = async (req, res, next) => {
 
     // Check if an Admin already exists
     const existingAdmin = await db.user.findFirst({
-      where: { role: 'ADMIN' },
+      where: { role: 'SUPER_ADMIN' },
     });
 
     if (existingAdmin) {
@@ -623,14 +623,14 @@ const CreateFirstAdmin = async (req, res, next) => {
         password: hashedPassword,
         password_visible: password, // Optional: consider removing in production
         name: name || 'Admin User',
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
         avatar:
           'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg', // Default avatar
       },
     });
 
     res.status(201).json({
-      message: 'First Admin created successfully!',
+      message: 'First Super Admin created successfully!',
       user: firstAdmin,
     });
   } catch (error) {

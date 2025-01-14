@@ -98,7 +98,7 @@ const getAllFrameTypes = async (req, res) => {
     if (role === 'SUPER_ADMIN') {
       // If the user is SUPER_ADMIN, use companyId from the query if provided
       if (queryCompanyId) {
-        whereCondition.companyId = parseInt(queryCompanyId, 10); // Apply companyId filter from query
+        whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined; // Apply companyId filter from query
       }
     } else {
       // For non-SUPER_ADMIN roles, restrict results to the user's companyId
