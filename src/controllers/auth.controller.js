@@ -573,7 +573,8 @@ const GetRecentUsers = async (req, res, next) => {
     const { role, companyId } = req.user;
 
     // Admin: Fetch all users, Subadmin: Fetch only users from their own company
-    const whereCondition = role === 'ADMIN' ? {} : { companyId: companyId };
+    const whereCondition =
+      role === 'SUPER_ADMIN' ? {} : { companyId: companyId };
 
     // Fetch the last 5 users created, sorted by creation date (descending)
     const recentUsers = await db.user.findMany({

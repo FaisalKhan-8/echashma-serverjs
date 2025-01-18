@@ -26,7 +26,7 @@ const getAllExpenses = async (req, res, next) => {
 
     // Check if queryCompanyId is provided
     if (queryCompanyId) {
-      whereCondition.companyId = queryCompanyId || undefined;
+      whereCondition.companyId = Number(queryCompanyId) || undefined;
     } else if (role !== 'SUPER_ADMIN') {
       // For non-SUPER_ADMIN roles, use the companyId from the token
       if (!userCompanyId) {
