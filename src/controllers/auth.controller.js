@@ -514,8 +514,8 @@ const DeleteUser = async (req, res, next) => {
       throw new AppError('User not found!', 404);
     }
 
-    // Check if the user trying to delete belongs to the same company
-    if (existingUser.companyId !== companyId) {
+    // Skip the companyId check for SUPER_ADMIN, as they can delete any user
+    if (role !== 'SUPER_ADMIN' && existingUser.companyId !== companyId) {
       throw new AppError(
         'You can only delete users from your own company!',
         403
