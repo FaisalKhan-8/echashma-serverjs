@@ -9,7 +9,7 @@
     "build": "babel src --out-dir dist"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^6.2.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -19,7 +19,7 @@
     "multer": "^1.4.5-lts.1",
     "pkg": "^5.7.0",
     "portfinder": "^1.0.32",
-    "prisma": "^5.22.0",
+    "prisma": "^6.2.1",
     "uuid": "^11.0.3",
     "zod": "^3.23.8"
   },

@@ -155,7 +155,7 @@ const getProductById = async (req, res) => {
 };
 
 // Update a product by ID, including associations with suppliers and branches
-const updateProduct = async (req, res) => {
+const updateProduct = async (req, res, next) => {
   const { id } = req.params;
   const { name, code } = req.body;
   const { companyId, role } = req.user; // Get userId, companyId, and role from authenticated user
@@ -170,16 +170,25 @@ const updateProduct = async (req, res) => {
     });
 
     if (existingProduct) {
-      return res.status(400).json({
-        error: 'Product with this name or code already exists',
-      });
+      throw new AppError('Product with this name or code already exists', 400);
     }
 
     // Admin users can update any product; others can only update their own products
     let updatedProduct;
 
-    if (role === 'ADMIN') {
-      // Admin: can update any product
+    if (role === 'SUPER_ADMIN') {
+      const superAdminProductCheck = await db.product.findFirst({
+        where: {
+          OR: [{ name }, { code }],
+          companyId: existingProduct.companyId,
+          NOT: { id: Number(id) }, // Ensure the product being updated is not included in the check
+        },
+      });
+
+      if (superAdminProductCheck) {
+        throw new AppError('Product with this name or code already exist', 403);
+      }
+
       updatedProduct = await db.product.update({
         where: { id: Number(id) },
         data: { name, code },
@@ -198,7 +207,7 @@ const updateProduct = async (req, res) => {
     res.status(200).json(updatedProduct);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Unable to update product' });
+    next(error);
   }
 };
 
@@ -213,7 +222,7 @@ const deleteProduct = async (req, res) => {
 
   try {
     // If the user is an ADMIN, they can delete any product
-    if (role === 'ADMIN') {
+    if (role === 'SUPER_ADMIN') {
       const product = await db.product.findUnique({
         where: { id: Number(id) },
       });

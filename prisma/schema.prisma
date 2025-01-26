@@ -20,7 +20,7 @@ model User {
   companyId        Int?
   password_visible String
   products         Product[]
-  company          Company?  @relation(fields: [companyId], references: [id])
+  company          Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   branches         Branch[]  @relation("UserBranches")
 }
 
@@ -38,7 +38,6 @@ model Company {
   updated_at      DateTime          @default(now()) @updatedAt
   uuid            String            @unique @default(uuid())
   branches        Branch[]          @relation("CompanyBranches")
-  Brands          Brands[]
   CoatingType     CoatingType[]
   CustomerInvoice CustomerInvoice[]
   Expense         Expense[]
@@ -51,6 +50,7 @@ model Company {
   Supplier        Supplier[]
   users           User[]
   VisionType      VisionType[]
+  Brands          Brands[]
 }
 
 model Branch {
@@ -64,7 +64,7 @@ model Branch {
   updated_at      DateTime          @updatedAt
   uuid            String            @unique @default(uuid())
   companyId       Int
-  company         Company           @relation("CompanyBranches", fields: [companyId], references: [id])
+  company         Company           @relation("CompanyBranches", fields: [companyId], references: [id], onDelete: Cascade)
   CustomerInvoice CustomerInvoice[]
   users           User[]            @relation("UserBranches")
 
@@ -73,8 +73,8 @@ model Branch {
 
 model Product {
   id                  Int                   @id @default(autoincrement())
-  code                String                @unique
-  name                String                @unique
+  code                String
+  name                String
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   userId              Int?
@@ -82,13 +82,10 @@ model Product {
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
-  Company             Company?              @relation(fields: [companyId], references: [id])
+  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user                User?                 @relation(fields: [userId], references: [id])
   PurchaseItem        PurchaseItem[]
   suppliers           Supplier[]            @relation("ProductToSupplier")
-
-  @@unique([companyId, name])
-  @@unique([companyId, code])
 }
 
 model Supplier {
@@ -106,7 +103,7 @@ model Supplier {
   uuid          String     @unique @default(uuid())
   companyId     Int?
   Purchase      Purchase[]
-  Company       Company?   @relation(fields: [companyId], references: [id])
+  Company       Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   products      Product[]  @relation("ProductToSupplier")
 }
 
@@ -116,7 +113,7 @@ model FrameType {
   name                String                @unique
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
-  Company             Company?              @relation(fields: [companyId], references: [id])
+  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
 }
@@ -129,7 +126,7 @@ model ShapeType {
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
-  Company             Company?              @relation(fields: [companyId], references: [id])
+  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model VisionType {
@@ -137,7 +134,7 @@ model VisionType {
   code      String   @unique
   name      String   @unique
   companyId Int?
-  Company   Company? @relation(fields: [companyId], references: [id])
+  Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model CoatingType {
@@ -145,7 +142,7 @@ model CoatingType {
   code      String   @unique
   name      String   @unique
   companyId Int?
-  Company   Company? @relation(fields: [companyId], references: [id])
+  Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Brands {
@@ -153,7 +150,7 @@ model Brands {
   code                String                @unique
   name                String                @unique
   companyId           Int?
-  Company             Company?              @relation(fields: [companyId], references: [id])
+  company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
@@ -171,8 +168,8 @@ model Purchase {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   companyId    Int?
-  Company      Company?       @relation(fields: [companyId], references: [id])
-  supplier     Supplier       @relation(fields: [supplierId], references: [id])
+  Company      Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   items        PurchaseItem[] @relation("PurchaseToPurchaseItem")
 }
 
@@ -190,11 +187,11 @@ model PurchaseItem {
   shapeTypeId Int?
   modalNo     String?
   brandId     Int?
-  Brand       Brands?    @relation(fields: [brandId], references: [id])
-  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id])
-  product     Product    @relation(fields: [productId], references: [id])
+  Brand       Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade)
-  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id])
+  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
 }
 
 model CustomerInvoice {
@@ -216,8 +213,8 @@ model CustomerInvoice {
   leftEye          Json
   rightEye         Json
   branchId         Int?
-  branch           Branch?               @relation(fields: [branchId], references: [id])
-  company          Company               @relation(fields: [companyId], references: [id])
+  branch           Branch?               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items            CustomerInvoiceItem[] @relation("InvoiceToInvoiceItem")
 }
 
@@ -237,11 +234,11 @@ model CustomerInvoiceItem {
   updatedAt       DateTime        @updatedAt
   cgst            Float?
   sgst            Float?
-  brands          Brands          @relation(fields: [brandId], references: [id])
-  frameType       FrameType       @relation(fields: [frameTypeId], references: [id])
+  brands          Brands          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  frameType       FrameType       @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
   customerInvoice CustomerInvoice @relation("InvoiceToInvoiceItem", fields: [invoiceId], references: [id], onDelete: Cascade)
-  product         Product         @relation(fields: [productId], references: [id])
-  shapeType       ShapeType       @relation(fields: [shapeTypeId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shapeType       ShapeType       @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
 }
 
 model Inventory {
@@ -255,11 +252,11 @@ model Inventory {
   updatedAt   DateTime   @updatedAt
   brandId     Int?
   companyId   Int
-  brands      Brands?    @relation(fields: [brandId], references: [id])
-  company     Company    @relation(fields: [companyId], references: [id])
-  frameType   FrameType? @relation(fields: [frameTypeId], references: [id])
-  product     Product    @relation(fields: [productId], references: [id])
-  shapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id])
+  brands      Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  frameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
 }
 
 model ExpenseCategory {
@@ -269,7 +266,7 @@ model ExpenseCategory {
   updated_at DateTime  @default(now()) @updatedAt
   companyId  Int?
   expenses   Expense[]
-  Company    Company?  @relation(fields: [companyId], references: [id])
+  Company    Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Expense {
@@ -280,8 +277,8 @@ model Expense {
   updated_at  DateTime        @updatedAt
   categoryId  Int
   companyId   Int?
-  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
-  Company     Company?        @relation(fields: [companyId], references: [id])
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  Company     Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Prescription {

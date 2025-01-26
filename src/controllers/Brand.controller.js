@@ -3,8 +3,11 @@ const db = require('../utils/db.config');
 
 // Create a new coating type
 const createBrand = async (req, res, next) => {
-  const { code, name, companyId: selectedCompanyId } = req.body;
+  const { code, name } = req.body;
   const { companyId: userCompanyId, role } = req.user; // Extract user-specific companyId from the token
+  const { companyId: selectedCompanyId } = req.query;
+
+  console.log(selectedCompanyId, 'selectedCompanyId');
 
   try {
     let companyId;
@@ -13,7 +16,7 @@ const createBrand = async (req, res, next) => {
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
         // If SUPER_ADMIN passes a companyId in the request, use that
-        companyId = selectedCompanyId;
+        companyId = parseInt(selectedCompanyId, 10);
       } else {
         // If no companyId is provided by SUPER_ADMIN, allow them to create a brand without it (they can pick any company)
         throw new AppError(
@@ -151,7 +154,6 @@ const getBrandById = async (req, res) => {
 const updateBrand = async (req, res, next) => {
   const { id } = req.params;
   const { code, name } = req.body;
-
   try {
     // Check if the code or name already exists for another brand
     const existingBrand = await db.brands.findFirst({

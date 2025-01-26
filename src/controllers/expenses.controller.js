@@ -68,13 +68,9 @@ const getAllExpenses = async (req, res, next) => {
 
 // Function to create a new expense
 const createExpense = async (req, res, next) => {
-  const {
-    amount,
-    description,
-    categoryId,
-    companyId: selectedCompanyId,
-  } = req.body;
+  const { amount, description, categoryId } = req.body;
   const { companyId: userCompanyId, role } = req.user; // Extract user-specific companyId from the token
+  const { companyId: selectedCompanyId } = req.query;
 
   // Ensure amount and categoryId are provided
   if (!amount || !categoryId) {
@@ -90,7 +86,7 @@ const createExpense = async (req, res, next) => {
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
         // If SUPER_ADMIN passes a companyId in the request, use that
-        companyId = selectedCompanyId;
+        companyId = parseInt(selectedCompanyId, 10);
       } else {
         // If no companyId is provided by SUPER_ADMIN, throw error
         throw new AppError(

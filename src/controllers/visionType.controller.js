@@ -3,8 +3,9 @@ const db = require('../utils/db.config');
 
 // Create a new vision type
 const createVisionType = async (req, res, next) => {
-  const { code, name, companyId: selectedCompanyId } = req.body;
+  const { code, name } = req.body;
   const { companyId: userCompanyId, role } = req.user; // Extract companyId and role from the user's token
+  const { companyId: selectedCompanyId } = req.query;
 
   try {
     let companyId;
@@ -13,7 +14,7 @@ const createVisionType = async (req, res, next) => {
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
         // If SUPER_ADMIN provides a companyId, use it
-        companyId = selectedCompanyId;
+        companyId = parseInt(selectedCompanyId, 10);
       } else {
         // If no companyId is provided, SUPER_ADMIN can create the vision type for any company
         throw new AppError(

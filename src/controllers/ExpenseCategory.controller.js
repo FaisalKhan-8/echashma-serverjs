@@ -3,8 +3,9 @@ const { AppError } = require('../errors/AppError.js');
 
 // Create a new Expense Category
 const createExpenseCategory = async (req, res, next) => {
-  const { name, companyId: selectedCompanyId } = req.body;
+  const { name } = req.body;
   const { companyId: userCompanyId, role } = req.user; // Extract user-specific companyId from the token
+  const { companyId: selectedCompanyId } = req.query;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required.' });
@@ -17,7 +18,7 @@ const createExpenseCategory = async (req, res, next) => {
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
         // If SUPER_ADMIN passes a companyId in the request, use that
-        companyId = selectedCompanyId;
+        companyId = parseInt(selectedCompanyId, 10);
       } else {
         // If no companyId is provided by SUPER_ADMIN, throw error
         throw new AppError(

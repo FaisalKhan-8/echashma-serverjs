@@ -4,8 +4,9 @@ const db = require('../utils/db.config');
 // Create a new frame type
 
 const createFrameType = async (req, res, next) => {
-  const { code, name, companyId: selectedCompanyId } = req.body;
-  const { companyId: userCompanyId, role } = req.user; // Extract companyId and role from the user's token
+  const { code, name } = req.body;
+  const { companyId: userCompanyId, role } = req.user;
+  const { companyId: selectedCompanyId } = req.query; // Extract companyId and role from the user's token
 
   try {
     let companyId;
@@ -13,7 +14,7 @@ const createFrameType = async (req, res, next) => {
     // If the user is SUPER_ADMIN, they can either pass a companyId or leave it out
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
-        companyId = selectedCompanyId;
+        companyId = parseInt(selectedCompanyId, 10);
       } else {
         throw new AppError(
           'SUPER_ADMIN must provide a companyId when creating a frame type',

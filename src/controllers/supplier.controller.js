@@ -6,6 +6,8 @@ const createSupplier = async (req, res, next) => {
   const { role, companyId: userCompanyId } = req.user; // Extract companyId from the token (user's company)
   const { companyId: queryCompanyId } = req.query; // Extract companyId from query parameters
 
+  console.log(queryCompanyId, 'queryCompanyId');
+
   // Destructure the supplier data from the request body
   const { code, name, address, contactPerson, contactNo, email, gstin, uin } =
     req.body;
@@ -33,7 +35,6 @@ const createSupplier = async (req, res, next) => {
       where: {
         OR: [
           { code },
-          { name },
           { gstin }, // Add other fields that should be unique for the supplier
         ],
         companyId, // Ensure the supplier belongs to the correct company
