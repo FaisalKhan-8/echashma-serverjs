@@ -359,34 +359,82 @@ const updateCompany = async (req, res, next) => {
   }
 };
 
-const deleteCompany = async (req, res, next) => {
+const updateDocument = async (req, res, next) => {
   try {
-    // Destructure the id from params
-    const { id } = req.params; // Correctly extract the id
-
-    // Convert id to integer
-    const companyIdNumber = parseInt(id, 10);
-
-    // Validate the ID
-    if (isNaN(companyIdNumber)) {
-      throw new AppError('Invalid company ID format!', 400);
-    }
+    const { companyId } = req.params;
 
     // Check if the company exists
     const existingCompany = await db.company.findUnique({
-      where: { id: companyIdNumber }, // Use the parsed number here
+      where: { id: Number(companyId) },
     });
 
     if (!existingCompany) {
       throw new AppError('Company not found!', 404);
     }
 
-    // Delete the company
+    // Get file paths for PAN card and Aadhaar card images
+    const pancardImage = req.files?.pancard
+      ? req.files.pancard[0].filename
+      : null;
+    const aadhaarcardImage = req.files?.adharcard
+      ? req.files.adharcard[0].filename
+      : null;
+
+    // Prepare update object
+    const updateData = {};
+    if (pancardImage) updateData.pancard = pancardImage;
+    if (aadhaarcardImage) updateData.aadhaarcard = aadhaarcardImage;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError('No valid documents provided for update!', 400);
+    }
+
+    // Update the company document
+    const updatedCompany = await db.company.update({
+      where: { id: Number(companyId) },
+      data: updateData,
+    });
+
+    res.status(200).json({
+      message: 'Company documents updated successfully!',
+      company: updatedCompany,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteCompany = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const companyIdNumber = parseInt(id, 10);
+
+    if (isNaN(companyIdNumber)) {
+      throw new AppError('Invalid company ID format!', 400);
+    }
+
+    // Check if the company exists
+    const existingCompany = await db.company.findUnique({
+      where: { id: companyIdNumber },
+      include: {
+        branches: true, // Ensure we fetch related branches
+      },
+    });
+
+    if (!existingCompany) {
+      throw new AppError('Company not found!', 404);
+    }
+
+    // Prevent deletion if branches exist
+    if (existingCompany.branches.length > 0) {
+      throw new AppError('Cannot delete company with existing branches!', 400);
+    }
+
+    // Delete the company if no branches exist
     await db.company.delete({
       where: { id: companyIdNumber },
     });
 
-    // Respond with success message
     res.status(200).json({
       message: 'Company deleted successfully!',
     });
@@ -399,6 +447,7 @@ module.exports = {
   createCompany,
   upload,
   getAllCompanies,
+  updateDocument,
   getCompanyById,
   updateCompany,
   deleteCompany,

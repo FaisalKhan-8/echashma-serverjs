@@ -261,6 +261,7 @@ async function getAllCustomerInvoices(req, res, next) {
     const { branchId: queryBranchId } = req.query;
 
     console.log('Role:', role);
+    console.log(queryBranchId, 'queryBranchId');
 
     let branchId;
     let companyFilter = {};
@@ -405,7 +406,7 @@ const getCustomerInvoiceById = async (req, res, next) => {
     console.log('Invoice ID:', id);
 
     // Admins can view any invoice
-    if (role === 'ADMIN') {
+    if (role === 'SUPER_ADMIN') {
       const invoice = await db.customerInvoice.findUnique({
         where: {
           id: parseInt(id), // Assuming `id` is an integer

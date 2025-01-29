@@ -7,6 +7,7 @@ const {
   updateCompany,
   deleteCompany,
   getCompanyById,
+  updateDocument,
 } = require('../controllers/companies.controller');
 const authenticateUser = require('../middleware/authenticateUser');
 
@@ -29,6 +30,12 @@ companyRoutes.put(
   upload, // Use upload middleware here
   authorizeAdmin,
   updateCompany
+);
+companyRoutes.patch(
+  '/updateDocument/:companyId',
+  upload,
+  authorizeAdmin,
+  updateDocument
 );
 companyRoutes.delete('/deleteCompany/:id', authorizeAdmin, deleteCompany);
 
