@@ -55,7 +55,7 @@ model Company {
 
 model Branch {
   id              Int               @id @default(autoincrement())
-  branchName      String            @unique
+  branchName      String
   address         String
   phone           String
   email           String?
@@ -90,8 +90,8 @@ model Product {
 
 model Supplier {
   id            Int        @id @default(autoincrement())
-  code          String     @unique
-  name          String     @unique
+  code          String
+  name          String
   address       String
   contactPerson String
   contactNo     String
@@ -109,8 +109,8 @@ model Supplier {
 
 model FrameType {
   id                  Int                   @id @default(autoincrement())
-  code                String                @unique
-  name                String                @unique
+  code                String
+  name                String
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
   Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -120,8 +120,8 @@ model FrameType {
 
 model ShapeType {
   id                  Int                   @id @default(autoincrement())
-  code                String                @unique
-  name                String                @unique
+  code                String
+  name                String
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
@@ -131,24 +131,24 @@ model ShapeType {
 
 model VisionType {
   id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String   @unique
+  code      String
+  name      String
   companyId Int?
   Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model CoatingType {
   id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String   @unique
+  code      String
+  name      String
   companyId Int?
   Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Brands {
   id                  Int                   @id @default(autoincrement())
-  code                String                @unique
-  name                String                @unique
+  code                String
+  name                String
   companyId           Int?
   company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   CustomerInvoiceItem CustomerInvoiceItem[]
@@ -159,7 +159,7 @@ model Brands {
 model Purchase {
   id           Int            @id @default(autoincrement())
   purchaseDate DateTime
-  billNo       String         @unique
+  billNo       String
   supplierId   Int
   totalAmount  Float
   totalCGST    Float?
@@ -261,7 +261,7 @@ model Inventory {
 
 model ExpenseCategory {
   id         Int       @id @default(autoincrement())
-  name       String    @unique
+  name       String
   created_at DateTime  @default(now())
   updated_at DateTime  @default(now()) @updatedAt
   companyId  Int?
