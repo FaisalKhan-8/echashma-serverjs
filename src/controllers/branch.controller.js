@@ -209,14 +209,27 @@ const getBranches = async (req, res, next) => {
           });
         }
 
+        // branches = await db.branch.findMany({
+        //   where: {
+        //     companyId: companyId, // Filter by companyId
+        //     subadmins: {
+        //       some: {
+        //         id: userId, // Only branches assigned to this subadmin
+        //       },
+        //     },
+        //     ...searchConditions, // Apply search term if present
+        //   },
+        //   skip: offset,
+        //   take: limitNum,
+        //   include: {
+        //     company: true, // Include company details for branches
+        //     users: true,
+        //   },
+        // });
+
         branches = await db.branch.findMany({
           where: {
             companyId: companyId, // Filter by companyId
-            subadmins: {
-              some: {
-                id: userId, // Only branches assigned to this subadmin
-              },
-            },
             ...searchConditions, // Apply search term if present
           },
           skip: offset,
@@ -229,16 +242,24 @@ const getBranches = async (req, res, next) => {
 
         totalBranches = await db.branch.count({
           where: {
-            companyId: companyId, // Count branches in their company
-            subadmins: {
-              some: {
-                id: userId, // Ensure the subadmin is assigned to this branch
-              },
-            },
+            companyId: companyId, // Count branches within their company
             ...searchConditions, // Apply search term if present
           },
         });
         break;
+
+      // totalBranches = await db.branch.count({
+      //   where: {
+      //     companyId: companyId, // Count branches in their company
+      //     subadmins: {
+      //       some: {
+      //         id: userId, // Ensure the subadmin is assigned to this branch
+      //       },
+      //     },
+      //     ...searchConditions, // Apply search term if present
+      //   },
+      // });
+      // break;
 
       case 'MANAGER':
         // MANAGER: Can only see branches they are assigned to within their company
@@ -304,6 +325,8 @@ async function getBranchById(req, res, next) {
     const { branchId } = req.params; // Extract branchId from the route parameters
     const { role } = req.user; // Get the role from the authenticated user
 
+    console.log(req.user, 'user');
+
     // Validate branchId
     if (!branchId || isNaN(branchId)) {
       throw new AppError('Invalid companyId provided', 400);
@@ -320,12 +343,14 @@ async function getBranchById(req, res, next) {
 
     // Fetch the branch based on branchId
     const branch = await db.branch.findUnique({
-      where: { id: Number(branchId) }, // Ensure branchId is treated as a number
+      where: { id: Number(branchId) },
       include: {
         users: true,
         company: true,
       },
     });
+
+    console.log(branch, 'branch');
 
     // If no branch is found, return a 404 error
     if (!branch) {

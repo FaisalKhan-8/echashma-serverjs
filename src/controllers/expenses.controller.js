@@ -69,8 +69,11 @@ const getAllExpenses = async (req, res, next) => {
 // Function to create a new expense
 const createExpense = async (req, res, next) => {
   const { amount, description, categoryId } = req.body;
-  const { companyId: userCompanyId, role } = req.user; // Extract user-specific companyId from the token
+  const { companyId: userCompanyId, role } = req.user;
+
   const { companyId: selectedCompanyId } = req.query;
+
+  console.log(req.body);
 
   // Ensure amount and categoryId are provided
   if (!amount || !categoryId) {
@@ -118,16 +121,18 @@ const createExpense = async (req, res, next) => {
     const newExpense = await db.expense.create({
       data: {
         amount,
-        description: description || null,
-        categoryId, // Ensure the expense is linked to the correct category
-        companyId, // Attach the correct companyId to the expense
+        description: description || '',
+        categoryId,
+        companyId,
       },
     });
+
+    console.log(newExpense, 'newExpense');
 
     res.status(201).json(newExpense);
   } catch (error) {
     console.error(error);
-    next(error); // Pass the error to the global error handler
+    next(error);
   }
 };
 

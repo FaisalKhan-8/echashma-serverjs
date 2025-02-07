@@ -28,6 +28,7 @@ const CreateUser = async (req, res, next) => {
     const userCompanyId = req.user.companyId; // For SUBADMIN, their assigned company ID
 
     console.log(role, 'roleee');
+    console.log(userCompanyId, 'userCompanyId');
 
     // Validate required fields manually
     if (!password) {
@@ -49,7 +50,7 @@ const CreateUser = async (req, res, next) => {
 
     let companyId = null;
     let finalEmail = email; // Default to the user-provided email
-    let finalName = contactPerson || req.body.name; // Use the contact person name if provided
+    let finalName = contactPerson || req.body.name;
 
     // Start a transaction
     const result = await db.$transaction(async (prisma) => {
@@ -183,6 +184,8 @@ const CreateUser = async (req, res, next) => {
       // Hash the password
       const hashedPassword = hashSync(password, 10);
 
+      console.log(hashedPassword, 'hashedPassword');
+
       // Create the user
       const newUser = await prisma.user.create({
         data: {
@@ -224,11 +227,15 @@ const Login = async (req, res, next) => {
     LoginUserSchema.parse(req.body);
     const { email, password } = req.body;
 
+    console.log(req.body, 'user credentials');
+
     // Fetch user from the database without company details first
     let user = await db.user.findFirst({
       where: { email },
       include: {},
     });
+
+    console.log(user, 'user details found');
 
     if (!user) {
       return next(new AppError('User does not exist!', 404));
@@ -252,6 +259,8 @@ const Login = async (req, res, next) => {
     if (!isPasswordValid) {
       return next(new AppError('Invalid credentials!', 401));
     }
+
+    console.log(isPasswordValid, 'isPasswordValid');
 
     // Extract the branchId from the first branch in the branches array (if available)
     const branchId =
@@ -360,7 +369,7 @@ const GetAllUser = async (req, res, next) => {
           skip: offset,
           take: limitNum,
           include: {
-            company: true, // Include company details for users
+            company: true,
           },
         });
 
