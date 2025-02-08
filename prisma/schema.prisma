@@ -8,20 +8,22 @@ datasource db {
 }
 
 model User {
-  id               Int       @id @default(autoincrement())
-  name             String?
-  email            String    @unique
-  password         String
-  avatar           String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
-  role             String    @default("MANAGER")
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @default(now()) @updatedAt
-  uuid             String    @unique @default(uuid())
-  companyId        Int?
-  password_visible String
-  products         Product[]
-  company          Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branches         Branch[]  @relation("UserBranches")
+  id                   Int       @id @default(autoincrement())
+  name                 String?
+  email                String    @unique
+  password             String
+  avatar               String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
+  role                 String    @default("MANAGER")
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @default(now()) @updatedAt
+  uuid                 String    @unique @default(uuid())
+  companyId            Int?
+  password_visible     String
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  products             Product[]
+  company              Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branches             Branch[]  @relation("UserBranches")
 }
 
 model Company {

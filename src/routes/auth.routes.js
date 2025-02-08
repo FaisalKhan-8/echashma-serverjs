@@ -8,6 +8,8 @@ const {
   GetLoggedInUser,
   GetRecentUsers,
   CreateFirstAdmin,
+  ForgetPass,
+  ResetPassword,
 } = require('../controllers/auth.controller'); // No need for '.js' in CommonJS
 const authorizeAdmin = require('../middleware/authorizeAdmin');
 const authenticateUser = require('../middleware/authenticateUser');
@@ -18,6 +20,8 @@ const authRoutes = Router();
 authRoutes.post('/createUser', upload, authenticateUser, CreateUser);
 authRoutes.post('/admin/first', CreateFirstAdmin);
 authRoutes.post('/login', Login);
+authRoutes.post('/forgot-password', ForgetPass);
+authRoutes.post('/reset-password', ResetPassword);
 authRoutes.get('/getAllUser', authenticateUser, GetAllUser);
 authRoutes.get('/profile', authenticateUser, GetLoggedInUser);
 authRoutes.get('/recent-users', authenticateUser, GetRecentUsers);

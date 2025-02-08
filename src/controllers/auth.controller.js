@@ -5,6 +5,8 @@ const { LoginUserSchema, UpdateUserSchema } = require('../schema/user.js');
 const { AppError } = require('../errors/AppError.js');
 const { z } = require('zod');
 const upload = require('../middleware/upload.js');
+const crypto = require('crypto');
+const sendEmail = require('../utils/sendEmail.js');
 
 const { hashSync, compare } = bcrypt;
 
@@ -508,6 +510,138 @@ const UpdateUser = async (req, res, next) => {
   }
 };
 
+// ----- --- --- forget password ---- --- ---
+const ForgetPass = async (req, res, next) => {
+  try {
+    // 1. Extract email from the request body.
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required.' });
+    }
+
+    console.log(req.body, 'hello');
+
+    // 2. Find the user by email.
+    const user = await db.user.findUnique({
+      where: { email },
+    });
+
+    // 3. For security, respond with the same message even if the user doesn't exist.
+    if (!user) {
+      return res.status(200).json({
+        message:
+          'If that email address is in our database, we will send you a password reset link.',
+      });
+    }
+
+    // 4. Generate a secure reset token.
+    const resetToken = crypto.randomBytes(32).toString('hex');
+
+    console.log(resetToken, 'reset token');
+
+    // 5. Hash the reset token with bcryptjs before saving.
+    const hashedResetToken = await bcrypt.hash(resetToken, 10);
+
+    // 6. Set the token expiration time (e.g., 1 hour from now).
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 3600000 ms = 1 hour
+
+    // 7. Update the user record with the hashed reset token, expiration,
+    //    and update password_visible with the plain reset token.
+    await db.user.update({
+      where: { email },
+      data: {
+        resetPasswordToken: hashedResetToken,
+        resetPasswordExpires: resetTokenExpiry,
+        password_visible: resetToken, // storing the plain token
+      },
+    });
+
+    // 8. Construct the password reset URL.
+    // Ensure you have set FRONTEND_URL in your environment variables.
+    const resetUrl = `${
+      process.env.FRONTEND_URL
+    }/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+    // 9. Compose the email message.
+    const message = `
+      <h1>Password Reset Request</h1>
+      <p>You requested to reset your password. Click the link below to reset it:</p>
+      <p><a href="${resetUrl}" target="_blank">Reset Your Password</a></p>
+      <p>This link will expire in one hour.</p>
+      <p>If you did not request a password reset, please ignore this email.</p>
+    `;
+
+    // 10. Send the email using the sendEmail utility.
+    await sendEmail({
+      to: email,
+      subject: 'Password Reset Request',
+      html: message,
+    });
+
+    // 11. Respond with a generic success message.
+    res.status(200).json({
+      message:
+        'If that email address is in our database, we will send you a password reset link.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const ResetPassword = async (req, res, next) => {
+  try {
+    // 1. Extract email, token, and new password from the request body.
+    const { email, token, password } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email are required.' });
+    }
+
+    // 2. Find the user by email.
+    const user = await db.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid email or token.' });
+    }
+
+    // 3. Check if the reset token has expired.
+    if (user.resetPasswordExpires && user.resetPasswordExpires < new Date()) {
+      return res.status(400).json({ message: 'Reset token has expired.' });
+    }
+
+    // 4. Validate the provided token against the stored hashed token.
+    const isValidToken = await bcrypt.compare(token, user.resetPasswordToken);
+    if (!isValidToken) {
+      return res.status(400).json({ message: 'Invalid token.' });
+    }
+
+    // 5. Hash the new password.
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 6. Update the user record:
+    //    - Set the new hashed password.
+    //    - Update the password_visible field with the plain text password.
+    //    - Clear the reset token fields.
+    await db.user.update({
+      where: { email },
+      data: {
+        password: hashedPassword,
+        password_visible: password,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
+
+    // 7. Respond with a success message.
+    res.status(200).json({ message: 'Password reset successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { ResetPassword };
+
 // TODO: Delete user api
 const DeleteUser = async (req, res, next) => {
   const { id } = req.params;
@@ -654,6 +788,8 @@ module.exports = {
   GetAllUser,
   GetLoggedInUser,
   UpdateUser,
+  ForgetPass,
+  ResetPassword,
   DeleteUser,
   GetRecentUsers,
   CreateFirstAdmin,
