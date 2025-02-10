@@ -208,6 +208,9 @@ model CustomerInvoice {
   balance          Float
   customerLocation String
   grandTotal       Float
+  totalCGST        Float                 @default(0)
+  totalSGST        Float                 @default(0)
+  totalGST         Float                 @default(0)
   orderDate        DateTime
   testedBy         String?
   companyId        Int

@@ -158,47 +158,54 @@ const getProductById = async (req, res) => {
 const updateProduct = async (req, res, next) => {
   const { id } = req.params;
   const { name, code } = req.body;
-  const { companyId, role } = req.user; // Get userId, companyId, and role from authenticated user
+  const { companyId, role } = req.user;
 
   try {
-    // Check if a product with the same name or code already exists, excluding the product being updated
+    let companyIdToCheck;
+    let currentProduct;
+
+    // Determine the company to check based on role
+    if (role === 'SUPER_ADMIN') {
+      currentProduct = await db.product.findUnique({
+        where: { id: Number(id) },
+      });
+
+      if (!currentProduct) {
+        throw new AppError('Product not found', 404);
+      }
+      companyIdToCheck = currentProduct.companyId;
+    } else {
+      companyIdToCheck = companyId;
+    }
+
+    // Check for duplicates in the target company
     const existingProduct = await db.product.findFirst({
       where: {
         OR: [{ name }, { code }],
-        NOT: { id: Number(id) }, // Ensure the product being updated is not included in the check
+        companyId: companyIdToCheck,
+        NOT: { id: Number(id) },
       },
     });
 
     if (existingProduct) {
-      throw new AppError('Product with this name or code already exists', 400);
+      throw new AppError(
+        'Product with this name or code already exists in the company',
+        400
+      );
     }
 
-    // Admin users can update any product; others can only update their own products
+    // Proceed with the update
     let updatedProduct;
-
     if (role === 'SUPER_ADMIN') {
-      const superAdminProductCheck = await db.product.findFirst({
-        where: {
-          OR: [{ name }, { code }],
-          companyId: existingProduct.companyId,
-          NOT: { id: Number(id) }, // Ensure the product being updated is not included in the check
-        },
-      });
-
-      if (superAdminProductCheck) {
-        throw new AppError('Product with this name or code already exist', 403);
-      }
-
       updatedProduct = await db.product.update({
         where: { id: Number(id) },
         data: { name, code },
       });
     } else {
-      // Non-admin users: can only update their own products within their company
       updatedProduct = await db.product.update({
         where: {
           id: Number(id),
-          companyId, // Ensure the product belongs to the authenticated user's company
+          companyId,
         },
         data: { name, code },
       });

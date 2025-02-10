@@ -117,31 +117,44 @@ const createCustomerInvoice = async (req, res, next) => {
         productId,
         quantity,
         price,
-        amount,
+        discount = 0,
         modalNo,
         frameTypeId,
         shapeId,
         brandId,
       } = item;
 
+      // Calculate amount before discount
+      const amountBeforeDiscount = price * quantity;
+
+      // Calculate discount amount (percentage of amountBeforeDiscount)
+      const discountAmount = (discount / 100) * amountBeforeDiscount;
+      const discountedAmount = amountBeforeDiscount - discountAmount;
+
       let cgst = 0;
       let sgst = 0;
-      let totalAmount = amount;
+      let totalAmountPerItem = discountedAmount;
 
-      // If GST is enabled, calculate CGST and SGST
+      // Apply GST if enabled
       if (gstStatus) {
-        const gstRate = 0.18; // Assuming 18% GST, can be dynamic if needed
-        const gstAmount = amount * gstRate;
-        cgst = gstAmount / 2; // 9% CGST
-        sgst = gstAmount / 2; // 9% SGST
-        totalAmount = amount + cgst + sgst;
+        const gstRate = 0.18;
+        const gstAmount = discountedAmount * gstRate;
+        cgst = gstAmount / 2;
+        sgst = gstAmount / 2;
+        totalAmountPerItem = discountedAmount + gstAmount;
       }
+
+      // Round to 2 decimal places
+      cgst = Number(cgst.toFixed(2));
+      sgst = Number(sgst.toFixed(2));
+      totalAmountPerItem = Number(totalAmountPerItem.toFixed(2));
 
       return {
         productId,
         quantity,
         rate: price,
-        amount: totalAmount,
+        discount, // Store percentage
+        amount: totalAmountPerItem,
         modalNo,
         frameTypeId,
         shapeTypeId: shapeId,
@@ -151,10 +164,37 @@ const createCustomerInvoice = async (req, res, next) => {
       };
     });
 
-    // Calculate the total amount for the invoice (including GST if applicable)
-    const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-    const totalCGST = items.reduce((sum, item) => sum + item.cgst, 0);
-    const totalSGST = items.reduce((sum, item) => sum + item.sgst, 0);
+    // Calculate the total amount before overall discount
+    let totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+    totalAmount = Number(totalAmount.toFixed(2));
+
+    const totalCGST = Number(
+      items.reduce((sum, item) => sum + item.cgst, 0).toFixed(2)
+    );
+    const totalSGST = Number(
+      items.reduce((sum, item) => sum + item.sgst, 0).toFixed(2)
+    );
+
+    // Apply overall discount (if provided)
+    const overallDiscountPercentage = invoiceData.discount || 0;
+    const overallDiscountAmount = Number(
+      (totalAmount * (overallDiscountPercentage / 100)).toFixed(2)
+    );
+    totalAmount -= overallDiscountAmount;
+    totalAmount = Number(totalAmount.toFixed(2));
+
+    if (totalAmount < 0) {
+      throw new AppError('Total amount cannot be negative after discount', 400);
+    }
+
+    const advanceAmount = Number((Number(invoiceData.advance) || 0).toFixed(2));
+
+    let balanceAmount = totalAmount - advanceAmount;
+    balanceAmount = Number(balanceAmount.toFixed(2));
+
+    if (balanceAmount < 0) {
+      throw new AppError('Balance cannot be negative', 400);
+    }
 
     // Step 6: Convert orderDate to Date object if it's not already
     const formattedOrderDate = new Date(orderDate);
@@ -228,11 +268,16 @@ const createCustomerInvoice = async (req, res, next) => {
           ...invoiceData,
           orderNo: invoiceNo,
           totalAmount,
+          totalCGST,
+          totalSGST,
+          totalGST: Number((totalCGST + totalSGST).toFixed(2)),
           rightEye,
           leftEye,
           orderDate: formattedOrderDate,
           companyId,
           branchId,
+          advance: advanceAmount,
+          balance: balanceAmount,
           items: {
             create: items,
           },

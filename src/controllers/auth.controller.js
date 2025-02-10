@@ -195,7 +195,7 @@ const CreateUser = async (req, res, next) => {
           password: hashedPassword,
           password_visible: password,
           name: finalName || req.body.contactPerson || req.body.name, // Use final name (contact person or default)
-          role: role || 'MANAGER', // Default to "MANAGER" if role is not specified
+          role: role || 'MANAGER',
           companyId: companyId, // Assign company ID to the user
         },
       });
@@ -249,7 +249,7 @@ const Login = async (req, res, next) => {
         where: { email },
         include: {
           company: true,
-          branches: true, // Ensure branches are included if not SUPER_ADMIN
+          branches: true,
         },
       });
 
@@ -258,6 +258,9 @@ const Login = async (req, res, next) => {
 
     // Check if password is valid
     const isPasswordValid = await compare(password, user.password);
+
+    console.log(isPasswordValid, 'password valid');
+
     if (!isPasswordValid) {
       return next(new AppError('Invalid credentials!', 401));
     }
@@ -438,16 +441,18 @@ const GetLoggedInUser = async (req, res, next) => {
 
 const UpdateUser = async (req, res, next) => {
   const { id } = req.params;
+  const { email, name, avatar } = req.body;
 
-  // TODO: handle company profile edit
   console.log(req.user, 'user token');
   console.log(id, 'user id');
-
-  const { email, password, name, avatar } = req.body; // Added companyId to the destructuring
-
   console.log(req.body, 'request body');
 
   try {
+    // Prevent super admin from editing their own account
+    if (req.user.role === 'SUPER_ADMIN' && parseInt(id) === req.user.userId) {
+      throw new AppError('Super admin cannot edit their own account!', 403);
+    }
+
     // Validate request body using Zod schema
     UpdateUserSchema.parse(req.body);
 
@@ -456,7 +461,7 @@ const UpdateUser = async (req, res, next) => {
       where: { id: parseInt(id) },
     });
 
-    console.log(existingUser, 'updated');
+    console.log(existingUser, 'existing user');
 
     if (!existingUser) {
       throw new AppError('User not found!', 404);
@@ -473,21 +478,20 @@ const UpdateUser = async (req, res, next) => {
       }
     }
 
-    // Hash the new password if provided
-    let hashedPassword = existingUser.password;
-    if (password) {
-      hashedPassword = hashSync(password, 10);
-    }
+    // // Hash the new password if provided
+    // let hashedPassword = existingUser.password;
+    // if (password) {
+    //   hashedPassword = hashSync(password, 10);
+    // }
 
     // Update the user with the new data
     const updatedUser = await db.user.update({
       where: { id: parseInt(id) },
       data: {
         email: email || existingUser.email,
-        password: hashedPassword,
         name: name || existingUser.name,
         avatar: avatar || existingUser.avatar,
-        companyId: existingUser.companyId, // Company ID remains unchanged if not provided in the request body
+        companyId: existingUser.companyId,
       },
     });
 
@@ -639,8 +643,6 @@ const ResetPassword = async (req, res, next) => {
     next(error);
   }
 };
-
-module.exports = { ResetPassword };
 
 // TODO: Delete user api
 const DeleteUser = async (req, res, next) => {
