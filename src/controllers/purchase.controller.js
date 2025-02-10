@@ -3,7 +3,7 @@ const db = require('../utils/db.config');
 
 exports.createPurchase = async (req, res, next) => {
   const { purchaseDate, billNo, supplierId, items, gstStatus } = req.body;
-  const { companyId } = req.user; // Using companyId from the authenticated user
+  const { companyId } = req.user;
 
   console.log(req.body);
 
@@ -12,7 +12,6 @@ exports.createPurchase = async (req, res, next) => {
       throw new AppError('Invalid company. Please authenticate first.', 401)();
     }
 
-    // Validate required fields
     if (
       !purchaseDate ||
       !billNo ||
@@ -26,12 +25,8 @@ exports.createPurchase = async (req, res, next) => {
       );
     }
 
-    // Check for existing purchase with the same billNo in the same company
     const existingPurchase = await db.purchase.findFirst({
-      where: {
-        billNo,
-        companyId,
-      },
+      where: { billNo, companyId },
     });
     if (existingPurchase) {
       throw new AppError(
@@ -40,11 +35,7 @@ exports.createPurchase = async (req, res, next) => {
       );
     }
 
-    // Validate supplier
-    const supplier = await db.supplier.findFirst({
-      where: { id: supplierId },
-    });
-
+    const supplier = await db.supplier.findFirst({ where: { id: supplierId } });
     if (!supplier) {
       throw new AppError('Invalid supplier', 400);
     }
@@ -54,7 +45,6 @@ exports.createPurchase = async (req, res, next) => {
     let totalSGST = 0;
     let netTotal = 0;
 
-    // Process purchase items
     const purchaseItemsData = [];
     for (const item of items) {
       const {
@@ -64,15 +54,13 @@ exports.createPurchase = async (req, res, next) => {
         discount = 0,
         modalNo = null,
         frameTypeId,
-        shapeId, // Updated to match the payload key
+        shapeId,
         brandId,
       } = item;
 
-      // Validate product
       const product = await db.product.findFirst({
         where: { id: productId, companyId },
       });
-
       if (!product) {
         throw new AppError(
           `Invalid product ID: ${productId} or product is not associated with the specified company`,
@@ -88,10 +76,9 @@ exports.createPurchase = async (req, res, next) => {
       let sgst = 0;
       let totalWithGST = amountAfterDiscount;
 
-      // If GST is enabled, calculate CGST and SGST
       if (gstStatus) {
-        cgst = amountAfterDiscount * 0.09; // Assuming 9% CGST
-        sgst = amountAfterDiscount * 0.09; // Assuming 9% SGST
+        cgst = amountAfterDiscount * 0.09;
+        sgst = amountAfterDiscount * 0.09;
         totalWithGST = amountAfterDiscount + cgst + sgst;
       }
 
@@ -115,85 +102,90 @@ exports.createPurchase = async (req, res, next) => {
       });
     }
 
-    // Round off the net total
     const roundOff = Math.round(netTotal) - netTotal;
 
-    // Create purchase and purchase items in a transaction
-    const newPurchase = await db.$transaction(async (prisma) => {
-      const purchase = await prisma.purchase.create({
-        data: {
-          purchaseDate: new Date(purchaseDate),
-          billNo,
-          supplierId,
-          companyId, // Include companyId here
-          totalAmount,
-          totalCGST: gstStatus ? totalCGST : 0, // Set CGST only if gstStatus is true
-          totalSGST: gstStatus ? totalSGST : 0, // Set SGST only if gstStatus is true
-          netTotal: netTotal + roundOff,
-          items: {
-            create: purchaseItemsData.map((item) => ({
-              product: { connect: { id: item.productId } }, // Correctly reference the product relation
-              quantity: item.quantity,
-              rate: item.rate,
-              discount: item.discount,
-              amount: item.amount,
-              cgst: item.cgst,
-              sgst: item.sgst,
-              modalNo: item.modalNo || null,
-              FrameType: { connect: { id: item.frameTypeId } },
-              ShapeType: { connect: { id: item.shapeTypeId } },
-              Brand: { connect: { id: item.brandId } },
-            })),
-          },
-        },
-        include: {
-          items: true, // Include related items
-        },
-      });
-
-      // Prepare inventory updates
-      const inventoryPromises = purchaseItemsData.map(async (item) => {
-        const { productId, quantity, frameTypeId, shapeTypeId, brandId } = item;
-
-        // Check if inventory exists
-        const inventory = await prisma.inventory.findFirst({
-          where: {
-            productId,
-            frameTypeId,
-            shapeTypeId,
-            brandId,
+    // Run the purchase creation and inventory updates in a transaction.
+    const newPurchase = await db.$transaction(
+      async (prisma) => {
+        // Create the purchase with its items.
+        const purchase = await prisma.purchase.create({
+          data: {
+            purchaseDate: new Date(purchaseDate),
+            billNo,
+            supplierId,
             companyId,
+            totalAmount,
+            totalCGST: gstStatus ? totalCGST : 0,
+            totalSGST: gstStatus ? totalSGST : 0,
+            netTotal: netTotal + roundOff,
+            items: {
+              create: purchaseItemsData.map((item) => ({
+                product: { connect: { id: item.productId } },
+                quantity: item.quantity,
+                rate: item.rate,
+                discount: item.discount,
+                amount: item.amount,
+                cgst: item.cgst,
+                sgst: item.sgst,
+                modalNo: item.modalNo || null,
+                FrameType: { connect: { id: item.frameTypeId } },
+                ShapeType: { connect: { id: item.shapeTypeId } },
+                Brand: { connect: { id: item.brandId } },
+              })),
+            },
           },
+          include: { items: true },
         });
 
-        if (inventory) {
-          // Increment the stock if inventory exists
-          return prisma.inventory.update({
-            where: { id: inventory.id },
-            data: { stock: { increment: quantity } },
-          });
-        } else {
-          // Create a new inventory record if it does not exist
-          return prisma.inventory.create({
-            data: {
-              productId,
-              frameTypeId,
-              shapeTypeId,
-              brandId,
-              companyId,
-              stock: quantity,
-            },
-          });
-        }
-      });
+        // ----- Batch Inventory Lookup Start -----
+        // Build an array of conditions for all items
+        const orConditions = purchaseItemsData.map((item) => ({
+          productId: item.productId,
+          frameTypeId: item.frameTypeId,
+          shapeTypeId: item.shapeTypeId,
+          brandId: item.brandId,
+          companyId,
+        }));
 
-      // Execute all inventory operations
-      await Promise.all(inventoryPromises);
+        // Get all matching inventory records at once.
+        const existingInventories = await prisma.inventory.findMany({
+          where: { OR: orConditions },
+        });
+        // ----- Batch Inventory Lookup End -----
 
-      return purchase;
-    });
+        // Prepare inventory updates/creations.
+        const inventoryPromises = purchaseItemsData.map(async (item) => {
+          const match = existingInventories.find(
+            (inv) =>
+              inv.productId === item.productId &&
+              inv.frameTypeId === item.frameTypeId &&
+              inv.shapeTypeId === item.shapeTypeId &&
+              inv.brandId === item.brandId
+          );
+          if (match) {
+            return prisma.inventory.update({
+              where: { id: match.id },
+              data: { stock: { increment: item.quantity } },
+            });
+          } else {
+            return prisma.inventory.create({
+              data: {
+                productId: item.productId,
+                frameTypeId: item.frameTypeId,
+                shapeTypeId: item.shapeTypeId,
+                brandId: item.brandId,
+                companyId,
+                stock: item.quantity,
+              },
+            });
+          }
+        });
+        await Promise.all(inventoryPromises);
+        return purchase;
+      },
+      { timeout: 30000 }
+    );
 
-    // Return the newly created purchase
     res.status(201).json({ success: true, data: newPurchase });
   } catch (error) {
     next(error);
