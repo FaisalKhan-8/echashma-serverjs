@@ -215,8 +215,6 @@ model CustomerInvoice {
   testedBy         String?
   companyId        Int
   discount         Float                 @default(0)
-  leftEye          Json
-  rightEye         Json
   branchId         Int?
   branch           Branch?               @relation(fields: [branchId], references: [id], onDelete: Cascade)
   company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -235,6 +233,8 @@ model CustomerInvoiceItem {
   frameTypeId     Int
   shapeTypeId     Int
   brandId         Int
+  leftEye         Json? // e.g., { SPH: 5, CYL: 2, AXIS: 6, ADD: 6 }
+  rightEye        Json? // e.g., { SPH: 10, CYL: 10, AXIS: 2, ADD: 3 }
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   cgst            Float?

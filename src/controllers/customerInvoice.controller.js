@@ -18,9 +18,7 @@ const createCustomerInvoice = async (req, res, next) => {
 
     // Step 2: Destructure the incoming data from the request
     const {
-      products,
-      rightEye,
-      leftEye,
+      products, // Each product now includes its own leftEye and rightEye details.
       orderDate,
       gstStatus,
       ...invoiceData
@@ -42,17 +40,16 @@ const createCustomerInvoice = async (req, res, next) => {
     });
 
     if (missingFields) {
-      throw new AppError('All required fields must be provided');
+      throw new AppError('All required fields must be provided', 400);
     }
 
     if (!companyId) {
       throw new AppError('User does not have an associated company', 400);
     }
 
-    // Step 4: Assign branchId based on user role
+    // Step 3: Assign branchId based on user role
     let branchId;
     if (role === 'MANAGER') {
-      // For MANAGER, use the branchId from the token (user's associated branch)
       branchId = parseInt(userBranchId, 10);
     } else if (
       role === 'SUPER_ADMIN' ||
@@ -64,7 +61,6 @@ const createCustomerInvoice = async (req, res, next) => {
       }
       branchId = parseInt(queryBranchId, 10) || undefined;
     } else {
-      // If the role is unrecognized, return an error
       return res.status(403).json({ message: 'Unauthorized role' });
     }
 
@@ -75,43 +71,35 @@ const createCustomerInvoice = async (req, res, next) => {
     // Step 4: Generate a unique invoice number
     let invoiceNo;
     let lastInvoice;
+    let existingInvoice;
 
-    // Loop until a unique invoice number is generated
     do {
-      // Fetch the most recent invoice number for the same company
       lastInvoice = await db.customerInvoice.findFirst({
-        orderBy: { createdAt: 'desc' }, // Get the latest invoice
+        orderBy: { createdAt: 'desc' },
         select: { orderNo: true },
       });
 
       if (lastInvoice) {
-        // Extract the numeric part from the last invoice number (e.g., "EC123")
-        const lastInvoiceNo = lastInvoice.orderNo; // Example: "EC123"
-        const numericPart = lastInvoiceNo.replace('EC', ''); // Remove 'EC' prefix
-
-        // Check if the extracted numeric part is a valid number
+        const lastInvoiceNo = lastInvoice.orderNo; // e.g., "EC123"
+        const numericPart = lastInvoiceNo.replace('EC', '');
         const numericValue = parseInt(numericPart, 10);
         if (!isNaN(numericValue)) {
-          // Increment the numeric part if it's valid
           invoiceNo = `EC${numericValue + 1}`;
         } else {
-          // If the extracted part is not a number, start from EC1
           invoiceNo = 'EC1';
         }
       } else {
-        // If no previous invoice exists, start from EC1
         invoiceNo = 'EC1';
       }
 
       console.log('Generated invoiceNo:', invoiceNo);
 
-      // Check if an invoice with this number already exists
       existingInvoice = await db.customerInvoice.findUnique({
         where: { orderNo: invoiceNo },
       });
     } while (existingInvoice);
 
-    // Step 5: Prepare items from products array and validate stock
+    // Step 5: Prepare items from products array and include prescription details
     const items = products.map((item) => {
       const {
         productId,
@@ -122,12 +110,12 @@ const createCustomerInvoice = async (req, res, next) => {
         frameTypeId,
         shapeId,
         brandId,
+        leftEye, // Prescription for left eye per product
+        rightEye, // Prescription for right eye per product
       } = item;
 
       // Calculate amount before discount
       const amountBeforeDiscount = price * quantity;
-
-      // Calculate discount amount (percentage of amountBeforeDiscount)
       const discountAmount = (discount / 100) * amountBeforeDiscount;
       const discountedAmount = amountBeforeDiscount - discountAmount;
 
@@ -153,7 +141,7 @@ const createCustomerInvoice = async (req, res, next) => {
         productId,
         quantity,
         rate: price,
-        discount, // Store percentage
+        discount, // percentage discount
         amount: totalAmountPerItem,
         modalNo,
         frameTypeId,
@@ -161,6 +149,8 @@ const createCustomerInvoice = async (req, res, next) => {
         brandId,
         cgst,
         sgst,
+        leftEye, // Store prescription details
+        rightEye, // Store prescription details
       };
     });
 
@@ -180,7 +170,6 @@ const createCustomerInvoice = async (req, res, next) => {
     const overallDiscountAmount = Number(
       (totalAmount * (overallDiscountPercentage / 100)).toFixed(2)
     );
-    // Clamp the total amount so it never goes below 0
     totalAmount = Math.max(totalAmount - overallDiscountAmount, 0);
     totalAmount = Number(totalAmount.toFixed(2));
 
@@ -199,8 +188,6 @@ const createCustomerInvoice = async (req, res, next) => {
 
     // Step 6: Convert orderDate to Date object if it's not already
     const formattedOrderDate = new Date(orderDate);
-
-    // Check if the orderDate is a valid Date
     if (isNaN(formattedOrderDate.getTime())) {
       throw new AppError('Invalid orderDate format', 400);
     }
@@ -228,7 +215,6 @@ const createCustomerInvoice = async (req, res, next) => {
           },
         };
 
-        // Fetch inventory record
         const inventoryRecord = await prisma.inventory.findFirst(
           inventoryQuery
         );
@@ -237,18 +223,18 @@ const createCustomerInvoice = async (req, res, next) => {
 
         if (!inventoryRecord) {
           return new AppError(
-            `Inventory record not found for productId: ${productId}`
+            `Inventory record not found for productId: ${productId}`,
+            400
           );
         }
 
-        // Check if stock is sufficient
         if (inventoryRecord.stock < quantity) {
           return new AppError(
-            `Insufficient stock for productId: ${productId}. Available stock: ${inventoryRecord.stock}, requested: ${quantity}`
+            `Insufficient stock for productId: ${productId}. Available stock: ${inventoryRecord.stock}, requested: ${quantity}`,
+            400
           );
         }
 
-        // Decrement stock
         await prisma.inventory.update({
           where: { id: inventoryRecord.id },
           data: {
@@ -272,8 +258,6 @@ const createCustomerInvoice = async (req, res, next) => {
           totalCGST,
           totalSGST,
           totalGST: Number((totalCGST + totalSGST).toFixed(2)),
-          rightEye,
-          leftEye,
           orderDate: formattedOrderDate,
           companyId,
           branchId,
@@ -285,14 +269,11 @@ const createCustomerInvoice = async (req, res, next) => {
         },
       });
 
-      console.log(invoice, '===create ');
-
+      console.log(invoice, '===created invoice');
       return invoice;
     });
 
-    console.log(newInvoice, '=== newInvoice ');
-
-    // Return the newly created invoice
+    console.log(newInvoice, '===newInvoice');
     return res.status(201).json(newInvoice);
   } catch (error) {
     console.error(error);
