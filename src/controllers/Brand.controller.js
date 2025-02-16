@@ -155,29 +155,6 @@ const updateBrand = async (req, res, next) => {
   const { id } = req.params;
   const { code, name } = req.body;
   try {
-    // Check if the code or name already exists for another brand
-    const existingBrand = await db.brands.findFirst({
-      where: {
-        AND: [
-          { NOT: { id: parseInt(id) } }, // Ensure it doesn't check the current brand
-          {
-            OR: [{ code }, { name }],
-          },
-        ],
-      },
-    });
-
-    if (existingBrand) {
-      if (existingBrand.code === code) {
-        // Throw AppError for code conflict
-        throw new AppError('Brand code already exists', 400);
-      }
-      if (existingBrand.name === name) {
-        // Throw AppError for name conflict
-        throw new AppError('Brand name already exists', 400);
-      }
-    }
-
     // Proceed with the update if no conflict
     const updatedBrand = await db.brands.update({
       where: { id: parseInt(id) },
@@ -187,7 +164,7 @@ const updateBrand = async (req, res, next) => {
     res.status(200).json(updatedBrand);
   } catch (error) {
     console.error(error);
-    next(error); // Pass the error to error-handling middleware
+    next(error);
   }
 };
 

@@ -180,7 +180,8 @@ const createCustomerInvoice = async (req, res, next) => {
     const overallDiscountAmount = Number(
       (totalAmount * (overallDiscountPercentage / 100)).toFixed(2)
     );
-    totalAmount -= overallDiscountAmount;
+    // Clamp the total amount so it never goes below 0
+    totalAmount = Math.max(totalAmount - overallDiscountAmount, 0);
     totalAmount = Number(totalAmount.toFixed(2));
 
     if (totalAmount < 0) {
@@ -313,13 +314,14 @@ async function getAllCustomerInvoices(req, res, next) {
 
     // Determine the branchId based on role
     if (role === 'SUPER_ADMIN') {
-      // For SUPER_ADMIN and ADMIN, use branchId from query
+      // For SUPER_ADMIN, use branchId from query if provided
       branchId = queryBranchId ? parseInt(queryBranchId, 10) : undefined;
       if (isNaN(branchId) && queryBranchId) {
         return next(new AppError('Invalid branchId provided', 400));
       }
     } else if (role === 'SUBADMIN' || role === 'ADMIN') {
-      // For SUBADMIN and ADMIN, check if branchId exists in query, else fallback to token (userBranchId)
+      // For SUBADMIN and ADMIN, use branchId from query if provided,
+      // and ensure companyId is available
       branchId = queryBranchId ? parseInt(queryBranchId, 10) : undefined;
       if (isNaN(branchId) && queryBranchId) {
         return next(new AppError('Invalid branchId provided', 400));
@@ -368,19 +370,29 @@ async function getAllCustomerInvoices(req, res, next) {
         OR: [
           {
             orderNo: {
-              contains: searchTerm, // Case-insensitive search by orderNo
+              contains: searchTerm,
               mode: 'insensitive',
             },
           },
           {
             customerName: {
-              contains: searchTerm, // Case-insensitive search by customerName
+              contains: searchTerm,
               mode: 'insensitive',
             },
           },
         ],
       },
-      skip: skip, // Offset for pagination
+      include: {
+        items: {
+          include: {
+            product: true, // Include related product details
+            brands: true,
+            frameType: true, // Include related frameType details
+            shapeType: true, // Include related shapeType details
+          },
+        },
+      },
+      skip, // Offset for pagination
       take: limit, // Limit the number of invoices returned
       orderBy: {
         createdAt: 'desc', // Order by creation date (most recent first)
@@ -391,7 +403,7 @@ async function getAllCustomerInvoices(req, res, next) {
     const totalInvoices = await db.customerInvoice.count({
       where: {
         ...companyFilter, // Apply the same company filter for counting
-        branchId: branchId || undefined, // Apply branchId if available
+        ...(branchId && { branchId }), // Apply branchId if available
         OR: [
           {
             orderNo: {
