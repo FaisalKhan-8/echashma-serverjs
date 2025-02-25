@@ -43,6 +43,7 @@ const upload = multer({
 }).fields([
   { name: 'pancard', maxCount: 1 },
   { name: 'adharcard', maxCount: 1 },
+  { name: 'companyLogo', maxCount: 1 },
 ]);
 
 // Error handler for multer-specific errors

@@ -39,6 +39,7 @@ const upload = multer({
 }).fields([
   { name: 'pancard', maxCount: 1 },
   { name: 'adharcard', maxCount: 1 },
+  { name: 'companyLogo', maxCount: 1 },
 ]);
 
 // Create Company Controller
@@ -81,6 +82,9 @@ const createCompany = async (req, res, next) => {
       : null; // Get only the filename
     const aadhaarcardImage = req.files?.adharcard
       ? req.files.adharcard[0].filename
+      : null; // Get only the filename
+    const companyLogoImage = req.files?.companyLogo
+      ? req.files.companyLogo[0].filename
       : null; // Get only the filename
 
     // Check if the GST number is already in use
@@ -134,6 +138,7 @@ const createCompany = async (req, res, next) => {
         gst,
         pancard: pancardImage,
         aadhaarcard: aadhaarcardImage,
+        companyLogo: companyLogoImage,
         users: {
           connect: userId.map((id) => ({ id })),
         },
@@ -202,6 +207,8 @@ async function getAllCompanies(req, res, next) {
       take: pageSizeNumber,
     });
 
+    console.log(companies, 'companies');
+
     if (companies.length === 0) {
       throw new AppError('No companies found', 404);
     }
@@ -239,7 +246,7 @@ async function getCompanyById(req, res, next) {
     const { role } = req.user; // Get the role from the authenticated user
 
     // Validate companyId
-    if (!companyId || isNaN(companyId)) {
+    if (!companyId) {
       throw new AppError('Invalid companyId provided', 400);
     }
 
@@ -379,11 +386,16 @@ const updateDocument = async (req, res, next) => {
     const aadhaarcardImage = req.files?.adharcard
       ? req.files.adharcard[0].filename
       : null;
+    const companyLogoImage = req.files?.companyLogo
+      ? req.files.companyLogo[0].filename
+      : null; // Get only the filename
 
     // Prepare update object
     const updateData = {};
     if (pancardImage) updateData.pancard = pancardImage;
     if (aadhaarcardImage) updateData.aadhaarcard = aadhaarcardImage;
+    if (pancardImage) updateData.pancard = pancardImage;
+    if (companyLogoImage) updateData.companyLogo = companyLogoImage;
 
     if (Object.keys(updateData).length === 0) {
       throw new AppError('No valid documents provided for update!', 400);

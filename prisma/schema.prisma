@@ -35,6 +35,7 @@ model Company {
   email           String            @unique
   gst             String?           @unique
   pancard         String?
+  companyLogo     String?
   aadhaarcard     String?
   created_at      DateTime          @default(now())
   updated_at      DateTime          @default(now()) @updatedAt

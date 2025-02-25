@@ -42,13 +42,19 @@ const CreateUser = async (req, res, next) => {
     // Extract file paths for pancard and aadhaarcard
     let pancardPath = null;
     let aadhaarcardPath = null;
+    let companyLogoPath = null;
 
     if (req.files) {
       pancardPath = req.files?.pancard ? req.files.pancard[0].path : null;
       aadhaarcardPath = req.files?.adharcard
         ? req.files.adharcard[0].path
         : null;
+      companyLogoPath = req.files?.companyLogo
+        ? req.files.companyLogo[0].filename
+        : null; // Get only the filename
     }
+
+    console.log('companyLogoPath ==>', companyLogoPath);
 
     let companyId = null;
     let finalEmail = email; // Default to the user-provided email
@@ -119,6 +125,7 @@ const CreateUser = async (req, res, next) => {
             phone: phone || null,
             email: email || finalEmail, // Use company email if provided, otherwise use user email
             gst: gst || null,
+            companyLogo: companyLogoPath,
             pancard: pancardPath,
             aadhaarcard: aadhaarcardPath,
           },
