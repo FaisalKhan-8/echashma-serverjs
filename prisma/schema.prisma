@@ -70,6 +70,8 @@ model Branch {
   company         Company           @relation("CompanyBranches", fields: [companyId], references: [id], onDelete: Cascade)
   CustomerInvoice CustomerInvoice[]
   users           User[]            @relation("UserBranches")
+  Purchase        Purchase[]
+  Inventory       Inventory[]
 
   @@unique([branchName, companyId])
 }
@@ -171,6 +173,8 @@ model Purchase {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   companyId    Int?
+  branchId     Int?
+  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade)
   Company      Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   items        PurchaseItem[] @relation("PurchaseToPurchaseItem")
@@ -258,6 +262,8 @@ model Inventory {
   updatedAt   DateTime   @updatedAt
   brandId     Int?
   companyId   Int
+  branchId    Int?
+  branch      Branch?    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   brands      Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   frameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)

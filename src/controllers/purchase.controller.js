@@ -3,15 +3,37 @@ const db = require('../utils/db.config');
 
 exports.createPurchase = async (req, res, next) => {
   const { purchaseDate, billNo, supplierId, items, gstStatus } = req.body;
-  const { companyId } = req.user;
-
-  console.log(req.body);
+  const { companyId, branchId: userBranchId, role } = req.user;
+  const { branchId: queryBranchId } = req.query;
 
   try {
+    // Step 1: Validate company and user role to determine branchId
     if (!companyId) {
-      throw new AppError('Invalid company. Please authenticate first.', 401)();
+      throw new AppError('Invalid company. Please authenticate first.', 401);
     }
 
+    // Step 2: Assign branchId based on user role
+    let branchId;
+    if (role === 'MANAGER') {
+      branchId = parseInt(userBranchId, 10);
+    } else if (
+      role === 'SUPER_ADMIN' ||
+      role === 'ADMIN' ||
+      role === 'SUBADMIN'
+    ) {
+      if (!queryBranchId) {
+        return res.status(400).json({ message: 'Branch ID is required' });
+      }
+      branchId = parseInt(queryBranchId, 10);
+    } else {
+      return res.status(403).json({ message: 'Unauthorized role' });
+    }
+
+    if (!branchId) {
+      return res.status(400).json({ message: 'Branch ID is required' });
+    }
+
+    // Step 3: Validate required fields
     if (
       !purchaseDate ||
       !billNo ||
@@ -25,28 +47,30 @@ exports.createPurchase = async (req, res, next) => {
       );
     }
 
+    // Step 4: Check for existing purchase with same billNo in the same branch
     const existingPurchase = await db.purchase.findFirst({
-      where: { billNo, companyId },
+      where: { billNo, companyId, branchId }, // Include branchId in check
     });
     if (existingPurchase) {
       throw new AppError(
-        'Purchase with this Bill No already exists for this company',
+        'Purchase with this Bill No already exists for this branch and company',
         400
       );
     }
 
+    // Step 5: Validate supplier
     const supplier = await db.supplier.findFirst({ where: { id: supplierId } });
     if (!supplier) {
       throw new AppError('Invalid supplier', 400);
     }
 
+    // Step 6: Calculate purchase totals and prepare items
     let totalAmount = 0;
     let totalCGST = 0;
     let totalSGST = 0;
     let netTotal = 0;
 
-    const purchaseItemsData = [];
-    for (const item of items) {
+    const purchaseItemsData = items.map((item) => {
       const {
         productId,
         quantity,
@@ -57,16 +81,6 @@ exports.createPurchase = async (req, res, next) => {
         shapeId,
         brandId,
       } = item;
-
-      const product = await db.product.findFirst({
-        where: { id: productId, companyId },
-      });
-      if (!product) {
-        throw new AppError(
-          `Invalid product ID: ${productId} or product is not associated with the specified company`,
-          400
-        );
-      }
 
       const totalItemAmount = rate * quantity;
       const discountAmount = totalItemAmount * (discount / 100);
@@ -87,7 +101,7 @@ exports.createPurchase = async (req, res, next) => {
       totalSGST += sgst;
       netTotal += totalWithGST;
 
-      purchaseItemsData.push({
+      return {
         productId,
         quantity,
         rate,
@@ -95,25 +109,26 @@ exports.createPurchase = async (req, res, next) => {
         amount: amountAfterDiscount,
         cgst,
         sgst,
-        modalNo: modalNo || null,
+        modalNo,
         frameTypeId,
         shapeTypeId: shapeId,
         brandId,
-      });
-    }
+      };
+    });
 
     const roundOff = Math.round(netTotal) - netTotal;
 
-    // Run the purchase creation and inventory updates in a transaction.
+    // Step 7: Create purchase and update inventory in a transaction
     const newPurchase = await db.$transaction(
       async (prisma) => {
-        // Create the purchase with its items.
+        // Create the purchase with branchId
         const purchase = await prisma.purchase.create({
           data: {
             purchaseDate: new Date(purchaseDate),
             billNo,
             supplierId,
             companyId,
+            branchId, // Include branchId
             totalAmount,
             totalCGST: gstStatus ? totalCGST : 0,
             totalSGST: gstStatus ? totalSGST : 0,
@@ -137,31 +152,31 @@ exports.createPurchase = async (req, res, next) => {
           include: { items: true },
         });
 
-        // ----- Batch Inventory Lookup Start -----
-        // Build an array of conditions for all items
+        // Batch inventory lookup with branchId
         const orConditions = purchaseItemsData.map((item) => ({
           productId: item.productId,
           frameTypeId: item.frameTypeId,
           shapeTypeId: item.shapeTypeId,
           brandId: item.brandId,
           companyId,
+          branchId, // Include branchId
         }));
 
-        // Get all matching inventory records at once.
         const existingInventories = await prisma.inventory.findMany({
           where: { OR: orConditions },
         });
-        // ----- Batch Inventory Lookup End -----
 
-        // Prepare inventory updates/creations.
+        // Update or create inventory records per branch
         const inventoryPromises = purchaseItemsData.map(async (item) => {
           const match = existingInventories.find(
             (inv) =>
               inv.productId === item.productId &&
               inv.frameTypeId === item.frameTypeId &&
               inv.shapeTypeId === item.shapeTypeId &&
-              inv.brandId === item.brandId
+              inv.brandId === item.brandId &&
+              inv.branchId === branchId // Ensure branch match
           );
+
           if (match) {
             return prisma.inventory.update({
               where: { id: match.id },
@@ -175,11 +190,13 @@ exports.createPurchase = async (req, res, next) => {
                 shapeTypeId: item.shapeTypeId,
                 brandId: item.brandId,
                 companyId,
+                branchId, // Include branchId
                 stock: item.quantity,
               },
             });
           }
         });
+
         await Promise.all(inventoryPromises);
         return purchase;
       },
