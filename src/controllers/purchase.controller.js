@@ -70,6 +70,10 @@ exports.createPurchase = async (req, res, next) => {
     let totalSGST = 0;
     let netTotal = 0;
 
+    // calculate total amount for item
+    let amountAfterDiscount;
+    let totalWithGST;
+
     const purchaseItemsData = items.map((item) => {
       const {
         productId,
@@ -84,19 +88,19 @@ exports.createPurchase = async (req, res, next) => {
 
       const totalItemAmount = rate * quantity;
       const discountAmount = totalItemAmount * (discount / 100);
-      const amountAfterDiscount = totalItemAmount - discountAmount;
+      amountAfterDiscount = totalItemAmount - discountAmount;
 
       let cgst = 0;
       let sgst = 0;
-      let totalWithGST = amountAfterDiscount;
+      totalWithGST = amountAfterDiscount;
 
       if (gstStatus) {
-        cgst = amountAfterDiscount * 0.09;
-        sgst = amountAfterDiscount * 0.09;
+        cgst = Math.round(amountAfterDiscount * 0.09);
+        sgst = Math.round(amountAfterDiscount * 0.09);
         totalWithGST = amountAfterDiscount + cgst + sgst;
       }
 
-      totalAmount += totalItemAmount;
+      totalAmount += amountAfterDiscount;
       totalCGST += cgst;
       totalSGST += sgst;
       netTotal += totalWithGST;
@@ -130,8 +134,8 @@ exports.createPurchase = async (req, res, next) => {
             companyId,
             branchId, // Include branchId
             totalAmount,
-            totalCGST: gstStatus ? totalCGST : 0,
-            totalSGST: gstStatus ? totalSGST : 0,
+            totalCGST: gstStatus ? Math.round(totalCGST) : 0,
+            totalSGST: gstStatus ? Math.round(totalSGST) : 0,
             netTotal: netTotal + roundOff,
             items: {
               create: purchaseItemsData.map((item) => ({
@@ -158,6 +162,7 @@ exports.createPurchase = async (req, res, next) => {
           frameTypeId: item.frameTypeId,
           shapeTypeId: item.shapeTypeId,
           brandId: item.brandId,
+          price: totalWithGST,
           companyId,
           branchId, // Include branchId
         }));
@@ -181,6 +186,7 @@ exports.createPurchase = async (req, res, next) => {
             return prisma.inventory.update({
               where: { id: match.id },
               data: { stock: { increment: item.quantity } },
+              price: totalWithGST,
             });
           } else {
             return prisma.inventory.create({
@@ -192,6 +198,7 @@ exports.createPurchase = async (req, res, next) => {
                 companyId,
                 branchId, // Include branchId
                 stock: item.quantity,
+                price: totalWithGST,
               },
             });
           }
