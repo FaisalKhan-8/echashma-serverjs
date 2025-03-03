@@ -77,14 +77,25 @@ model Branch {
 }
 
 model Product {
-  id                  Int                   @id @default(autoincrement())
-  code                String
-  name                String
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  userId              Int?
-  uuid                String                @unique @default(uuid())
-  companyId           Int?
+  id        Int      @id @default(autoincrement())
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int?
+  uuid      String   @unique @default(uuid())
+  companyId Int?
+
+  frameTypeId  Int?
+  shapeTypeId  Int?
+  visionTypeId Int?
+  brandId      Int?
+
+  FrameType  FrameType?  @relation(fields: [frameTypeId], references: [id])
+  ShapeType  ShapeType?  @relation(fields: [shapeTypeId], references: [id])
+  VisionType VisionType? @relation(fields: [visionTypeId], references: [id])
+  Brand      Brands?     @relation(fields: [brandId], references: [id])
+
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -121,6 +132,7 @@ model FrameType {
   Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
+  Product             Product[]
 }
 
 model ShapeType {
@@ -132,14 +144,16 @@ model ShapeType {
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
   Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Product             Product[]
 }
 
 model VisionType {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   code      String
   name      String
   companyId Int?
-  Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Product   Product[]
 }
 
 model CoatingType {
@@ -159,6 +173,7 @@ model Brands {
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   PurchaseItem        PurchaseItem[]
+  Product             Product[]
 }
 
 model Purchase {

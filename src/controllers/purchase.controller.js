@@ -65,14 +65,11 @@ exports.createPurchase = async (req, res, next) => {
     }
 
     // Step 6: Calculate purchase totals and prepare items
+    // Step 6: Calculate purchase totals and prepare items
     let totalAmount = 0;
     let totalCGST = 0;
     let totalSGST = 0;
     let netTotal = 0;
-
-    // calculate total amount for item
-    let amountAfterDiscount;
-    let totalWithGST;
 
     const purchaseItemsData = items.map((item) => {
       const {
@@ -86,33 +83,42 @@ exports.createPurchase = async (req, res, next) => {
         brandId,
       } = item;
 
-      const totalItemAmount = rate * quantity;
-      const discountAmount = totalItemAmount * (discount / 100);
-      amountAfterDiscount = totalItemAmount - discountAmount;
+      // Calculate per-unit discount and price after discount
+      const discountPerUnit = rate * (discount / 100);
+      const perUnitAfterDiscount = rate - discountPerUnit;
 
-      let cgst = 0;
-      let sgst = 0;
-      totalWithGST = amountAfterDiscount;
+      // Calculate per-unit GST if enabled
+      let perUnitCGST = 0;
+      let perUnitSGST = 0;
+      let perUnitPriceWithGST = perUnitAfterDiscount;
 
       if (gstStatus) {
-        cgst = Math.round(amountAfterDiscount * 0.09);
-        sgst = Math.round(amountAfterDiscount * 0.09);
-        totalWithGST = amountAfterDiscount + cgst + sgst;
+        perUnitCGST = Math.round(perUnitAfterDiscount * 0.09);
+        perUnitSGST = Math.round(perUnitAfterDiscount * 0.09);
+        perUnitPriceWithGST = perUnitAfterDiscount + perUnitCGST + perUnitSGST;
       }
 
-      totalAmount += amountAfterDiscount;
-      totalCGST += cgst;
-      totalSGST += sgst;
-      netTotal += totalWithGST;
+      // Calculate line totals (for purchase record)
+      const totalLineAmount = perUnitAfterDiscount * quantity;
+      const totalLineCGST = perUnitCGST * quantity;
+      const totalLineSGST = perUnitSGST * quantity;
+      const totalLineWithGST = perUnitPriceWithGST * quantity;
+
+      // Accumulate totals for the purchase record
+      totalAmount += totalLineAmount;
+      totalCGST += totalLineCGST;
+      totalSGST += totalLineSGST;
+      netTotal += totalLineWithGST;
 
       return {
         productId,
         quantity,
         rate,
         discount,
-        amount: amountAfterDiscount,
-        cgst,
-        sgst,
+        amount: totalLineAmount, // Total line amount without GST
+        cgst: totalLineCGST, // Total CGST for the line
+        sgst: totalLineSGST, // Total SGST for the line
+        price: perUnitPriceWithGST, // Per-unit price including GST
         modalNo,
         frameTypeId,
         shapeTypeId: shapeId,
@@ -125,14 +131,14 @@ exports.createPurchase = async (req, res, next) => {
     // Step 7: Create purchase and update inventory in a transaction
     const newPurchase = await db.$transaction(
       async (prisma) => {
-        // Create the purchase with branchId
+        // Create the purchase with branchId and associated items
         const purchase = await prisma.purchase.create({
           data: {
             purchaseDate: new Date(purchaseDate),
             billNo,
             supplierId,
             companyId,
-            branchId, // Include branchId
+            branchId,
             totalAmount,
             totalCGST: gstStatus ? Math.round(totalCGST) : 0,
             totalSGST: gstStatus ? Math.round(totalSGST) : 0,
@@ -156,22 +162,21 @@ exports.createPurchase = async (req, res, next) => {
           include: { items: true },
         });
 
-        // Batch inventory lookup with branchId
+        // Inventory update/creation using per-unit price
         const orConditions = purchaseItemsData.map((item) => ({
           productId: item.productId,
           frameTypeId: item.frameTypeId,
           shapeTypeId: item.shapeTypeId,
           brandId: item.brandId,
-          price: totalWithGST,
+          price: item.price, // Use per-unit price with GST
           companyId,
-          branchId, // Include branchId
+          branchId,
         }));
 
         const existingInventories = await prisma.inventory.findMany({
           where: { OR: orConditions },
         });
 
-        // Update or create inventory records per branch
         const inventoryPromises = purchaseItemsData.map(async (item) => {
           const match = existingInventories.find(
             (inv) =>
@@ -179,14 +184,19 @@ exports.createPurchase = async (req, res, next) => {
               inv.frameTypeId === item.frameTypeId &&
               inv.shapeTypeId === item.shapeTypeId &&
               inv.brandId === item.brandId &&
-              inv.branchId === branchId // Ensure branch match
+              inv.branchId === branchId
           );
+
+          const modalNoData = item.modalNo ? { modalNo: item.modalNo } : {};
 
           if (match) {
             return prisma.inventory.update({
               where: { id: match.id },
-              data: { stock: { increment: item.quantity } },
-              price: totalWithGST,
+              data: {
+                stock: { increment: item.quantity },
+                price: item.price, // per-unit price is saved here
+                ...modalNoData,
+              },
             });
           } else {
             return prisma.inventory.create({
@@ -196,9 +206,10 @@ exports.createPurchase = async (req, res, next) => {
                 shapeTypeId: item.shapeTypeId,
                 brandId: item.brandId,
                 companyId,
-                branchId, // Include branchId
+                branchId,
                 stock: item.quantity,
-                price: totalWithGST,
+                price: item.price, // per-unit price is set here
+                ...modalNoData,
               },
             });
           }
