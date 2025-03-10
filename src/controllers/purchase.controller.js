@@ -229,134 +229,101 @@ exports.createPurchase = async (req, res, next) => {
 
 // Update a purchase with GST and discount calculations
 exports.updatePurchase = async (req, res, next) => {
-  const { id } = req.params; // Extract purchase ID from the URL parameters
+  const { id } = req.params;
   const { purchaseDate, billNo, supplierId, gstStatus, items } = req.body;
-  const { companyId } = req.user; // Using companyId from the authenticated user
-
-  console.log(req.body);
+  const { companyId, branchId: userBranchId, role } = req.user;
+  const { branchId: queryBranchId } = req.query;
 
   try {
-    if (!companyId) {
-      throw new AppError('Invalid company. Please authenticate first.', 401);
+    // Validate company and determine branchId
+    if (!companyId) throw new AppError('Authentication required', 401);
+
+    // Determine branchId based on role
+    let branchId;
+    if (role === 'MANAGER') {
+      branchId = userBranchId;
+    } else if (['SUPER_ADMIN', 'ADMIN', 'SUBADMIN'].includes(role)) {
+      if (!queryBranchId) throw new AppError('Branch ID required', 400);
+      branchId = parseInt(queryBranchId, 10);
+    } else {
+      throw new AppError('Unauthorized access', 403);
     }
 
-    // Validate the purchase record
-    const existingPurchase = await db.purchase.findFirst({
-      where: { id: parseInt(id), companyId },
-      include: { items: true },
+    // Validate existing purchase
+    const existingPurchase = await db.purchase.findUnique({
+      where: { id: parseInt(id) },
+      include: { items: true, supplier: true },
     });
 
-    if (!existingPurchase) {
+    if (!existingPurchase || existingPurchase.companyId !== companyId) {
       throw new AppError('Purchase not found', 404);
     }
 
+    // Validate billNo uniqueness if changed
+    if (billNo && billNo !== existingPurchase.billNo) {
+      const existingBill = await db.purchase.findFirst({
+        where: { billNo, companyId, branchId },
+      });
+      if (existingBill) throw new AppError('Bill number exists', 400);
+    }
+
+    // Validate supplier
+    if (supplierId && supplierId !== existingPurchase.supplierId) {
+      const supplier = await db.supplier.findUnique({
+        where: { id: supplierId },
+      });
+      if (!supplier) throw new AppError('Invalid supplier', 400);
+    }
+
+    // Initialize totals
     let totalAmount = 0;
     let totalCGST = 0;
     let totalSGST = 0;
     let netTotal = 0;
 
-    // Build the update data dynamically
-    const updateData = {};
-    if (purchaseDate) updateData.purchaseDate = new Date(purchaseDate);
-    if (billNo) updateData.billNo = billNo;
-    if (supplierId) updateData.supplierId = supplierId;
+    const updateData = {
+      purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
+      billNo,
+      supplierId,
+      branchId,
+    };
 
-    const updatedItems = [];
-    if (Array.isArray(items) && items.length > 0) {
-      // Reverse the inventory impact of the existing purchase
-      const reverseInventoryPromises = existingPurchase.items.map(
-        async (item) => {
-          const { productId, quantity, frameTypeId, shapeTypeId, brandId } =
-            item;
+    if (items && items.length > 0) {
+      // Reverse existing inventory
+      await reverseInventory(existingPurchase.items, companyId, branchId);
 
-          // Update inventory to deduct the previously added stock
-          const inventory = await db.inventory.findFirst({
-            where: { productId, frameTypeId, shapeTypeId, brandId, companyId },
-          });
-
-          if (inventory) {
-            return db.inventory.update({
-              where: { id: inventory.id },
-              data: { stock: { decrement: quantity } },
-            });
-          }
-        }
+      // Process new items
+      const { updatedItems, totals } = await processPurchaseItems(
+        items,
+        companyId,
+        gstStatus
       );
 
-      await Promise.all(reverseInventoryPromises);
-
-      // Process and add new items
-      for (const item of items) {
-        const {
-          productId,
-          quantity,
-          rate,
-          discount = 0,
-          frameTypeId,
-          shapeId,
-          brandId,
-        } = item;
-
-        // Validate product
-        const product = await db.product.findFirst({
-          where: { id: productId, companyId },
-        });
-
-        if (!product) {
-          throw new AppError(
-            `Invalid product ID: ${productId} or product is not associated with the specified company`,
-            400
-          );
-        }
-
-        const totalItemAmount = rate * quantity;
-        const discountAmount = totalItemAmount * (discount / 100);
-        const amountAfterDiscount = totalItemAmount - discountAmount;
-
-        let cgst = 0;
-        let sgst = 0;
-        let totalWithGST = amountAfterDiscount;
-
-        // If GST is enabled, calculate CGST and SGST
-        if (gstStatus) {
-          cgst = amountAfterDiscount * 0.09; // Assuming 9% CGST
-          sgst = amountAfterDiscount * 0.09; // Assuming 9% SGST
-          totalWithGST = amountAfterDiscount + cgst + sgst;
-        }
-
-        totalAmount += totalItemAmount;
-        totalCGST += cgst;
-        totalSGST += sgst;
-        netTotal += totalWithGST;
-
-        updatedItems.push({
-          productId,
-          quantity,
-          rate,
-          discount,
-          amount: amountAfterDiscount,
-          cgst,
-          sgst,
-          modalNo: null,
-          frameTypeId,
-          shapeTypeId: shapeId,
-          brandId,
-        });
-      }
+      totalAmount = totals.totalAmount;
+      totalCGST = totals.totalCGST;
+      totalSGST = totals.totalSGST;
+      netTotal = totals.netTotal;
 
       const roundOff = Math.round(netTotal) - netTotal;
 
-      updateData.totalAmount = totalAmount;
-      updateData.totalCGST = gstStatus ? totalCGST : 0;
-      updateData.totalSGST = gstStatus ? totalSGST : 0;
-      updateData.netTotal = netTotal + roundOff;
-      updateData.items = {
-        deleteMany: {}, // Remove existing items before updating
-        create: updatedItems,
-      };
+      Object.assign(updateData, {
+        totalAmount,
+        totalCGST: gstStatus ? Math.round(totalCGST) : 0,
+        totalSGST: gstStatus ? Math.round(totalSGST) : 0,
+        netTotal: netTotal + roundOff,
+        items: {
+          deleteMany: {},
+          create: updatedItems.map((item) => ({
+            ...item,
+            FrameType: { connect: { id: item.frameTypeId } },
+            ShapeType: { connect: { id: item.shapeTypeId } },
+            Brand: { connect: { id: item.brandId } },
+          })),
+        },
+      });
     }
 
-    // Perform update and inventory adjustment in a transaction
+    // Transaction for purchase update and inventory management
     const updatedPurchase = await db.$transaction(async (prisma) => {
       const purchase = await prisma.purchase.update({
         where: { id: parseInt(id) },
@@ -364,36 +331,14 @@ exports.updatePurchase = async (req, res, next) => {
         include: { items: true },
       });
 
-      // Update inventory with new items
-      const inventoryPromises = updatedItems.map(async (item) => {
-        const { productId, quantity, frameTypeId, shapeTypeId, brandId } = item;
-
-        const inventory = await prisma.inventory.findFirst({
-          where: { productId, frameTypeId, shapeTypeId, brandId, companyId },
-        });
-
-        if (inventory) {
-          // Increment the stock if inventory exists
-          return prisma.inventory.update({
-            where: { id: inventory.id },
-            data: { stock: { increment: quantity } },
-          });
-        } else {
-          // Create a new inventory record if it does not exist
-          return prisma.inventory.create({
-            data: {
-              productId,
-              frameTypeId,
-              shapeTypeId,
-              brandId,
-              companyId,
-              stock: quantity,
-            },
-          });
-        }
-      });
-
-      await Promise.all(inventoryPromises);
+      if (items && items.length > 0) {
+        await updateInventory(
+          prisma,
+          updateData.items.create,
+          companyId,
+          branchId
+        );
+      }
 
       return purchase;
     });
@@ -404,164 +349,328 @@ exports.updatePurchase = async (req, res, next) => {
   }
 };
 
-// Get all purchases with pagination and search
-exports.getAllPurchases = async (req, res) => {
-  let { companyId } = req.user; // Change `const` to `let`
-  const { role } = req.user;
-  const {
-    page = 1,
-    limit = 10,
-    search = '',
-    companyId: queryCompanyId,
-  } = req.query;
+// Helper functions
+async function reverseInventory(items, companyId, branchId) {
+  return Promise.all(
+    items.map(async (item) => {
+      const inventory = await db.inventory.findFirst({
+        where: {
+          productId: item.productId,
+          frameTypeId: item.frameTypeId,
+          shapeTypeId: item.shapeTypeId,
+          brandId: item.brandId,
+          companyId,
+          branchId,
+        },
+      });
 
-  // If the role is SUPER_ADMIN, allow companyId from the query string
-  if (role === 'SUPER_ADMIN') {
-    // If no companyId is passed in the query, don't apply any filter for companyId
-    companyId = parseInt(queryCompanyId, 10) || undefined;
-  } else if (role !== 'SUPER_ADMIN' && !companyId) {
-    // For other roles, ensure companyId exists in the token
-    return res.status(400).json({
-      status: 'error',
-      message: 'Company ID is required to fetch invoices',
+      if (inventory) {
+        await db.inventory.update({
+          where: { id: inventory.id },
+          data: { stock: { decrement: item.quantity } },
+        });
+      }
+    })
+  );
+}
+
+async function processPurchaseItems(items, companyId, gstStatus) {
+  const updatedItems = [];
+  let totalAmount = 0;
+  let totalCGST = 0;
+  let totalSGST = 0;
+  let netTotal = 0;
+
+  for (const item of items) {
+    const {
+      productId,
+      quantity,
+      rate,
+      discount = 0,
+      frameTypeId,
+      shapeId,
+      brandId,
+    } = item;
+
+    // Validate product existence
+    const product = await db.product.findUnique({
+      where: { id: productId, companyId },
+    });
+    if (!product) throw new AppError(`Invalid product: ${productId}`, 400);
+
+    // Calculate item totals
+    const discountPerUnit = rate * (discount / 100);
+    const priceAfterDiscount = rate - discountPerUnit;
+
+    let perUnitCGST = 0;
+    let perUnitSGST = 0;
+    let priceWithGST = priceAfterDiscount;
+
+    if (gstStatus) {
+      perUnitCGST = Math.round(priceAfterDiscount * 0.09);
+      perUnitSGST = Math.round(priceAfterDiscount * 0.09);
+      priceWithGST += perUnitCGST + perUnitSGST;
+    }
+
+    const lineTotal = priceAfterDiscount * quantity;
+    const lineCGST = perUnitCGST * quantity;
+    const lineSGST = perUnitSGST * quantity;
+    const lineNetTotal = priceWithGST * quantity;
+
+    // Accumulate totals
+    totalAmount += lineTotal;
+    totalCGST += lineCGST;
+    totalSGST += lineSGST;
+    netTotal += lineNetTotal;
+
+    updatedItems.push({
+      productId,
+      quantity,
+      rate,
+      discount,
+      amount: lineTotal,
+      cgst: lineCGST,
+      sgst: lineSGST,
+      frameTypeId,
+      shapeTypeId: shapeId,
+      brandId,
     });
   }
 
-  // Parse pagination values with fallback defaults
-  const pageNumber = Math.max(1, parseInt(page, 10) || 1); // Ensure page is at least 1
-  const pageLimit = Math.max(1, parseInt(limit, 10) || 10); // Ensure limit is at least 1
-  const skip = (pageNumber - 1) * pageLimit;
+  return {
+    updatedItems,
+    totals: { totalAmount, totalCGST, totalSGST, netTotal },
+  };
+}
 
-  console.log('Request Details:', {
-    companyId,
-    role,
-    search,
-    pageNumber,
-    pageLimit,
-  });
+async function updateInventory(prisma, items, companyId, branchId) {
+  return Promise.all(
+    items.map(async (item) => {
+      const where = {
+        productId: item.productId,
+        frameTypeId: item.frameTypeId,
+        shapeTypeId: item.shapeTypeId,
+        brandId: item.brandId,
+        companyId,
+        branchId,
+      };
 
-  // Determine the company filter based on the user's role
-  let companyFilter = {};
+      // Calculate priceWithGST based on item data
+      const discountFactor = 1 - item.discount / 100;
+      const priceAfterDiscount = item.rate * discountFactor;
+      const perUnitCGST = item.cgst / item.quantity;
+      const perUnitSGST = item.sgst / item.quantity;
+      const priceWithGST = priceAfterDiscount + perUnitCGST + perUnitSGST;
 
-  if (role === 'SUPER_ADMIN' && companyId) {
-    // If SUPER_ADMIN and companyId is provided, apply filter
-    companyFilter.companyId = companyId;
-  } else if (role !== 'SUPER_ADMIN') {
-    // For non-SUPER_ADMIN roles, apply companyId from token
-    companyFilter.companyId = companyId;
-  }
+      const existing = await prisma.inventory.findFirst({ where });
 
+      if (existing) {
+        await prisma.inventory.update({
+          where: { id: existing.id },
+          data: {
+            stock: { increment: item.quantity },
+            price: priceWithGST,
+          },
+        });
+      } else {
+        await prisma.inventory.create({
+          data: {
+            ...where,
+            stock: item.quantity,
+            price: priceWithGST,
+          },
+        });
+      }
+    })
+  );
+}
+
+// Get all purchases with pagination and search
+exports.getAllPurchases = async (req, res, next) => {
   try {
-    console.log('Applying Company Filter:', companyFilter);
+    // Extract user details from the token
+    const { companyId, branchId: userBranchId, role } = req.user;
 
-    // Fetch purchases and count in parallel
-    const [purchases, totalPurchases] = await Promise.all([
-      db.purchase.findMany({
-        where: {
-          ...companyFilter,
+    // Extract query parameters
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      companyId: queryCompanyId,
+      branchId: queryBranchId,
+    } = req.query;
+
+    let branchId;
+    let companyFilter = {};
+
+    // Determine branchId and companyFilter based on user role
+    if (role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN can specify companyId and branchId via query
+      if (queryCompanyId) {
+        const parsedCompanyId = parseInt(queryCompanyId, 10);
+        if (isNaN(parsedCompanyId)) {
+          return next(new AppError('Invalid companyId provided', 400));
+        }
+        companyFilter.companyId = parsedCompanyId;
+      }
+      if (queryBranchId) {
+        branchId = parseInt(queryBranchId, 10);
+        if (isNaN(branchId)) {
+          return next(new AppError('Invalid branchId provided', 400));
+        }
+      }
+    } else if (role === 'ADMIN' || role === 'SUBADMIN') {
+      // ADMIN/SUBADMIN are restricted to their company, can specify branchId
+      if (!companyId) {
+        return next(new AppError('Company ID is required', 400));
+      }
+      companyFilter.companyId = companyId;
+      if (queryBranchId) {
+        branchId = parseInt(queryBranchId, 10);
+        if (isNaN(branchId)) {
+          return next(new AppError('Invalid branchId provided', 400));
+        }
+      }
+    } else if (role === 'MANAGER') {
+      // MANAGER is restricted to their own branch and company
+      if (!companyId || !userBranchId) {
+        return next(new AppError('Company or Branch ID is missing', 400));
+      }
+      companyFilter.companyId = companyId;
+      branchId = parseInt(userBranchId, 10);
+      if (isNaN(branchId)) {
+        return next(new AppError('Invalid branchId in token', 400));
+      }
+    } else {
+      // Unauthorized roles
+      return next(
+        new AppError('You do not have permission to view purchases', 403)
+      );
+    }
+
+    // Parse pagination parameters
+    const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+    const pageLimit = Math.max(1, parseInt(limit, 10) || 10);
+    const skip = (pageNumber - 1) * pageLimit;
+
+    // Build search conditions
+    const searchClause = search
+      ? {
           OR: [
-            { billNo: { contains: search, mode: 'insensitive' } }, // Case-insensitive search by billNo
+            { billNo: { contains: search, mode: 'insensitive' } },
+            { supplier: { name: { contains: search, mode: 'insensitive' } } },
             {
               items: {
                 some: {
-                  product: {
-                    name: { contains: search, mode: 'insensitive' }, // Case-insensitive search by product name
-                  },
+                  product: { name: { contains: search, mode: 'insensitive' } },
                 },
               },
             },
           ],
-        },
+        }
+      : {};
+
+    // Combine all conditions into the where clause
+    const whereClause = {
+      ...companyFilter,
+      ...(branchId !== undefined && { branchId }),
+      ...searchClause,
+    };
+
+    // Fetch purchases and total count in parallel
+    const [purchases, total] = await Promise.all([
+      db.purchase.findMany({
+        where: whereClause,
         skip,
         take: pageLimit,
         include: {
           items: {
             include: {
               product: true,
-              Brand: true,
+              Brand: true, // This is correct as per PurchaseItem model
               FrameType: true,
               ShapeType: true,
             },
           },
           supplier: true,
-          Company: true,
+          Company: true, // Matches uppercase field in Purchase model
+          branch: true, // Changed to lowercase to match model field
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
       }),
-      db.purchase.count({
-        where: {
-          ...companyFilter,
-          OR: [
-            { billNo: { contains: search, mode: 'insensitive' } },
-            {
-              items: {
-                some: {
-                  product: {
-                    name: { contains: search, mode: 'insensitive' },
-                  },
-                },
-              },
-            },
-          ],
-        },
-      }),
+      db.purchase.count({ where: whereClause }),
     ]);
 
-    console.log('Purchases Fetched:', purchases.length);
-    console.log('Total Purchases:', totalPurchases);
+    // Handle no purchases found
+    if (purchases.length === 0) {
+      return next(new AppError('No purchases found', 404));
+    }
 
-    // Respond with paginated data
+    // Send response with pagination data
     res.status(200).json({
       status: 'success',
-      totalPurchases,
-      totalPages: Math.ceil(totalPurchases / pageLimit),
-      currentPage: pageNumber,
-      purchases,
+      data: purchases,
+      pagination: {
+        total,
+        totalPages: Math.ceil(total / pageLimit),
+        currentPage: pageNumber,
+        limit: pageLimit,
+      },
     });
   } catch (error) {
-    console.error('Error Fetching Purchases:', error.message);
-    res.status(500).json({
-      status: 'error',
-      message: 'Unable to retrieve purchases. Please try again later.',
-    });
+    console.error('Error fetching purchases:', error);
+    next(new AppError('Internal server error', 500));
   }
 };
 
 // Get a specific purchase by ID
 exports.getPurchaseById = async (req, res) => {
   const { id } = req.params;
-  const { companyId, role } = req.user;
+  const { companyId, branchId: userBranchId, role } = req.user;
+  const { branchId: queryBranchId } = req.query;
 
   try {
-    const whereClause = { id: parseInt(id) };
-
-    // Restrict access for SUBADMIN and MANAGER
-    if (role === 'SUBADMIN' || role === 'MANAGER') {
-      whereClause.companyId = companyId;
+    // Determine branch ID
+    let branchId;
+    if (role === 'MANAGER') {
+      branchId = userBranchId;
+    } else if (['SUPER_ADMIN', 'ADMIN', 'SUBADMIN'].includes(role)) {
+      if (!queryBranchId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Branch ID is required',
+        });
+      }
+      branchId = parseInt(queryBranchId, 10);
     }
+
+    const whereClause = {
+      id: parseInt(id),
+      companyId: ['SUPER_ADMIN'].includes(role) ? undefined : companyId,
+      branchId,
+    };
 
     const purchase = await db.purchase.findUnique({
       where: whereClause,
       include: {
         items: {
           include: {
-            product: true, // Include related Product details
-            Brand: true, // Include related Brand details
-            FrameType: true, // Include related FrameType details
-            ShapeType: true, // Include related ShapeType details
+            product: true,
+            Brand: true,
+            FrameType: true,
+            ShapeType: true,
           },
         },
-        supplier: true, // Include related Supplier model
-        Company: true, // Include related Company model
+        supplier: true,
+        Company: true,
+        Branch: true,
       },
     });
 
     if (!purchase) {
       return res.status(404).json({
         success: false,
-        message: 'Purchase not found or access denied',
+        message: 'Purchase not found',
       });
     }
 
