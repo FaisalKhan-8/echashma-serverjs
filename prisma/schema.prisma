@@ -177,7 +177,7 @@ model Brands {
 }
 
 model Purchase {
-  id           Int            @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   purchaseDate DateTime
   billNo       String
   supplierId   Int
@@ -185,35 +185,39 @@ model Purchase {
   totalCGST    Float?
   totalSGST    Float?
   netTotal     Float
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  gstStatus    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   companyId    Int?
   branchId     Int?
-  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  Company      Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  items        PurchaseItem[] @relation("PurchaseToPurchaseItem")
+
+  branch   Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  Company  Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  items    PurchaseItem[] @relation("PurchaseToPurchaseItem")
 }
 
 model PurchaseItem {
-  id          Int        @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   purchaseId  Int
   productId   Int
   quantity    Int
   rate        Float
+  discount    Float?  @default(0)
   amount      Float
   cgst        Float?
   sgst        Float?
-  discount    Float?     @default(0)
+  netAmount   Float?
   frameTypeId Int?
   shapeTypeId Int?
   modalNo     String?
   brandId     Int?
-  Brand       Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
-  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade)
-  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
+
+  Brand     Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  FrameType FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  purchase  Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade)
+  ShapeType ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
 }
 
 model CustomerInvoice {
