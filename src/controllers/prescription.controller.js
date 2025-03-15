@@ -88,6 +88,8 @@ async function getAllPrescriptions(req, res, next) {
     // Fetch all prescriptions from the database
     const prescriptions = await db.prescription.findMany();
 
+    console.log(prescriptions, 'prescriptions');
+
     // Check if prescriptions exist
     if (!prescriptions || prescriptions.length === 0) {
       throw next(new AppError('No prescriptions found', 404));
