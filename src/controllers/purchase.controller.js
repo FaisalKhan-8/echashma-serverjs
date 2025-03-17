@@ -368,22 +368,27 @@ exports.createPurchase = async (req, res, next) => {
 
           const existing = await prisma.inventory.findFirst({ where });
 
-          const updateData = {
-            stock: { increment: item.quantity },
-            price: item.discountedRate, // Store without GST
-            ...(item.modalNo && { modalNo: item.modalNo }),
-          };
-
           if (existing) {
-            return prisma.inventory.update({
+            // Update existing inventory
+            await prisma.inventory.update({
               where: { id: existing.id },
-              data: updateData,
+              data: {
+                stock: { increment: item.quantity },
+                price: item.discountedRate,
+                ...(item.modalNo && { modalNo: item.modalNo }),
+              },
+            });
+          } else {
+            // Create new inventory with initial stock
+            await prisma.inventory.create({
+              data: {
+                ...where,
+                stock: item.quantity,
+                price: item.discountedRate,
+                ...(item.modalNo && { modalNo: item.modalNo }),
+              },
             });
           }
-
-          return prisma.inventory.create({
-            data: { ...where, ...updateData },
-          });
         })
       );
 
