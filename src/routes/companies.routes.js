@@ -34,7 +34,7 @@ companyRoutes.put(
 companyRoutes.patch(
   '/updateDocument/:companyId',
   upload,
-  authorizeAdmin,
+  authenticateUser,
   updateDocument
 );
 companyRoutes.delete('/deleteCompany/:id', authorizeAdmin, deleteCompany);
