@@ -108,10 +108,10 @@ model Supplier {
   id            Int        @id @default(autoincrement())
   code          String
   name          String
-  address       String
-  contactPerson String
-  contactNo     String
-  email         String     @unique
+  address       String?
+  contactPerson String?
+  contactNo     String?
+  email         String?    @unique
   gstin         String?    @unique
   uin           String?
   created_at    DateTime   @default(now())
