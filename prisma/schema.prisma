@@ -111,8 +111,8 @@ model Supplier {
   address       String?
   contactPerson String?
   contactNo     String?
-  email         String?    @unique
-  gstin         String?    @unique
+  email         String?
+  gstin         String?
   uin           String?
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt

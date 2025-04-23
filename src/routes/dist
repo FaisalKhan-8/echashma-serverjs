@@ -1,0 +1,5 @@
+<script>start("d:\\Beatrow\\Echashma\\eChashma-frot-end\\dist\\");</script>
+<script>onHasParentDirectory();</script>
+<script>addRow("assets","assets",1,0,"0 B",1745040705,"4/19/25, 11:01:45 AM");</script>
+<script>addRow("index.html","index.html",0,472,"472 B",1745040705,"4/19/25, 11:01:45 AM");</script>
+<script>addRow("logo.png","logo.png",0,14593,"14.3 kB",1744263845,"4/10/25, 11:14:05 AM");</script>

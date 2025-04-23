@@ -34,8 +34,7 @@ const createSupplier = async (req, res, next) => {
     const existingSupplier = await db.supplier.findFirst({
       where: {
         OR: [
-          { code },
-          { gstin }, // Add other fields that should be unique for the supplier
+          { code }, // Add other fields that should be unique for the supplier
         ],
         companyId, // Ensure the supplier belongs to the correct company
       },
