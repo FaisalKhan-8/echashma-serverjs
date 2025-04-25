@@ -1,5 +1,0 @@
--- AlterTable
-ALTER TABLE "Supplier" ALTER COLUMN "address" DROP NOT NULL,
-ALTER COLUMN "contactPerson" DROP NOT NULL,
-ALTER COLUMN "contactNo" DROP NOT NULL,
-ALTER COLUMN "email" DROP NOT NULL;

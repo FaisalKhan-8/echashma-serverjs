@@ -1,1 +1,0 @@
-Server is running on port: http://0.0.0.0:\\.\pipe\2d464def-71fd-4def-8b7f-aac15de3fb58
