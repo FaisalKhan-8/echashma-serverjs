@@ -16,7 +16,12 @@ const prescriptionSchema = z.object({
     .number()
     .min(-10, { message: 'Value cannot be less than -10' })
     .max(10, { message: 'Value cannot be greater than 10' })
-    .transform((value) => Number(value.toFixed(2))),
+    .nullable()
+    .transform((val) => {
+      if (val === null) return null;
+      // Round to 2 decimal places and handle values like 0.5, -0.2
+      return Number(val.toFixed(2));
+    }),
 });
 
 // Function to create a new prescription

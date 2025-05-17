@@ -3,71 +3,74 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
 
 model User {
   id                   Int       @id @default(autoincrement())
-  name                 String?
-  email                String    @unique
-  password             String
-  avatar               String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg")
-  role                 String    @default("MANAGER")
+  name                 String?   @db.VarChar(255)
+  email                String    @unique @db.VarChar(255)
+  password             String    @db.VarChar(255)
+  avatar               String?   @default("https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg") @db.VarChar(255)
+  role                 String    @default("MANAGER") @db.VarChar(50)
   created_at           DateTime  @default(now())
   updated_at           DateTime  @default(now()) @updatedAt
-  uuid                 String    @unique @default(uuid())
+  uuid                 String    @unique @default(uuid()) @db.UniqueIdentifier
   companyId            Int?
-  password_visible     String
+  password_visible     String    @db.VarChar(255)
   resetPasswordExpires DateTime?
-  resetPasswordToken   String?
+  resetPasswordToken   String?   @db.VarChar(255)
   products             Product[]
-  company              Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company              Company?  @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "User_Company_fkey")
   branches             Branch[]  @relation("UserBranches")
+  Company              Company?  @relation(fields: [companyId], references: [id])
 }
 
 model Company {
   id              Int               @id @default(autoincrement())
-  companyName     String            @unique
-  address         String?
-  contactPerson   String
-  phone           String?
-  email           String            @unique
-  gst             String?           @unique
-  pancard         String?
-  aadhaarcard     String?
+  companyName     String            @unique @db.VarChar(255)
+  address         String?           @db.VarChar(500)
+  contactPerson   String            @db.VarChar(255)
+  phone           String?           @db.VarChar(20)
+  email           String            @unique @db.VarChar(255)
+  gst             String?           @unique @db.VarChar(50)
+  pancard         String?           @db.VarChar(50)
+  aadhaarcard     String?           @db.VarChar(50)
   created_at      DateTime          @default(now())
   updated_at      DateTime          @default(now()) @updatedAt
-  uuid            String            @unique @default(uuid())
-  companyLogo     String?
+  uuid            String            @unique @default(uuid()) @db.UniqueIdentifier
+  companyLogo     String?           @db.VarChar(255)
   branches        Branch[]          @relation("CompanyBranches")
-  Brands          Brands[]
-  CoatingType     CoatingType[]
-  CustomerInvoice CustomerInvoice[]
-  Expense         Expense[]
-  ExpenseCategory ExpenseCategory[]
-  FrameType       FrameType[]
-  Inventory       Inventory[]
-  products        Product[]
-  Purchase        Purchase[]
-  ShapeType       ShapeType[]
-  Supplier        Supplier[]
-  users           User[]
-  VisionType      VisionType[]
+  Brands          Brands[]          @relation("CompanyBrands")
+  CoatingType     CoatingType[]     @relation("CompanyCoatingType")
+  CustomerInvoice CustomerInvoice[] @relation("CompanyCustomerInvoice")
+  Expense         Expense[]         @relation("CompanyExpense")
+  ExpenseCategory ExpenseCategory[] @relation("CompanyExpenseCategory")
+  FrameType       FrameType[]       @relation("CompanyFrameType")
+  Inventory       Inventory[]       @relation("CompanyInventory")
+  products        Product[]         @relation("CompanyProducts")
+  Purchase        Purchase[]        @relation("CompanyPurchase")
+  ShapeType       ShapeType[]       @relation("CompanyShapeType")
+  Supplier        Supplier[]        @relation("CompanySupplier")
+  users           User[]            @relation("CompanyUsers")
+  VisionType      VisionType[]      @relation("CompanyVisionType")
+  User            User[]
+  Product         Product[]
 }
 
 model Branch {
   id              Int               @id @default(autoincrement())
-  branchName      String
-  address         String
-  phone           String
-  email           String?
-  contactPerson   String
+  branchName      String            @db.VarChar(255)
+  address         String            @db.VarChar(500)
+  phone           String            @db.VarChar(20)
+  email           String?           @db.VarChar(255)
+  contactPerson   String            @db.VarChar(255)
   created_at      DateTime          @default(now())
   updated_at      DateTime          @updatedAt
-  uuid            String            @unique @default(uuid())
+  uuid            String            @unique @default(uuid()) @db.UniqueIdentifier
   companyId       Int
-  company         Company           @relation("CompanyBranches", fields: [companyId], references: [id], onDelete: Cascade)
+  company         Company           @relation("CompanyBranches", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Branch_Company_fkey")
   CustomerInvoice CustomerInvoice[]
   Inventory       Inventory[]
   Purchase        Purchase[]
@@ -78,12 +81,12 @@ model Branch {
 
 model Product {
   id                  Int                   @id @default(autoincrement())
-  code                String
-  name                String
+  code                String                @db.VarChar(100)
+  name                String                @db.VarChar(255)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   userId              Int?
-  uuid                String                @unique @default(uuid())
+  uuid                String                @unique @default(uuid()) @db.UniqueIdentifier
   companyId           Int?
   frameTypeId         Int?
   shapeTypeId         Int?
@@ -91,42 +94,43 @@ model Product {
   brandId             Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
-  Brand               Brands?               @relation(fields: [brandId], references: [id])
-  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  FrameType           FrameType?            @relation(fields: [frameTypeId], references: [id])
-  ShapeType           ShapeType?            @relation(fields: [shapeTypeId], references: [id])
-  user                User?                 @relation(fields: [userId], references: [id])
-  VisionType          VisionType?           @relation(fields: [visionTypeId], references: [id])
+  Brand               Brands?               @relation(fields: [brandId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company             Company?              @relation("CompanyProducts", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Product_Company_fkey")
+  FrameType           FrameType?            @relation(fields: [frameTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ShapeType           ShapeType?            @relation(fields: [shapeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user                User?                 @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  VisionType          VisionType?           @relation(fields: [visionTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   PurchaseItem        PurchaseItem[]
   suppliers           Supplier[]            @relation("ProductToSupplier")
+  Company             Company?              @relation(fields: [companyId], references: [id])
 }
 
 model Supplier {
   id            Int        @id @default(autoincrement())
-  code          String     @unique
-  name          String     @unique
-  address       String?
-  contactPerson String?
-  contactNo     String?
-  email         String?   
-  gstin         String?   
-  uin           String?
+  code          String     @unique @db.VarChar(100)
+  name          String     @unique @db.VarChar(255)
+  address       String?    @db.VarChar(500)
+  contactPerson String?    @db.VarChar(255)
+  contactNo     String?    @db.VarChar(20)
+  email         String?    @db.VarChar(255)
+  gstin         String?    @db.VarChar(50)
+  uin           String?    @db.VarChar(50)
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
-  uuid          String     @unique @default(uuid())
+  uuid          String     @unique @default(uuid()) @db.UniqueIdentifier
   companyId     Int?
   Purchase      Purchase[]
-  Company       Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company       Company?   @relation("CompanySupplier", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Supplier_Company_fkey")
   products      Product[]  @relation("ProductToSupplier")
 }
 
 model FrameType {
   id                  Int                   @id @default(autoincrement())
-  code                String
-  name                String
+  code                String                @db.VarChar(100)
+  name                String                @db.VarChar(255)
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
-  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company             Company?              @relation("CompanyFrameType", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FrameType_Company_fkey")
   Inventory           Inventory[]
   Product             Product[]
   PurchaseItem        PurchaseItem[]
@@ -134,39 +138,39 @@ model FrameType {
 
 model ShapeType {
   id                  Int                   @id @default(autoincrement())
-  code                String
-  name                String
+  code                String                @db.VarChar(100)
+  name                String                @db.VarChar(255)
   companyId           Int?
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   Product             Product[]
   PurchaseItem        PurchaseItem[]
-  Company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company             Company?              @relation("CompanyShapeType", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "ShapeType_Company_fkey")
 }
 
 model VisionType {
   id        Int       @id @default(autoincrement())
-  code      String
-  name      String
+  code      String    @db.VarChar(100)
+  name      String    @db.VarChar(255)
   companyId Int?
   Product   Product[]
-  Company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company   Company?  @relation("CompanyVisionType", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "VisionType_Company_fkey")
 }
 
 model CoatingType {
   id        Int      @id @default(autoincrement())
-  code      String
-  name      String
+  code      String   @db.VarChar(100)
+  name      String   @db.VarChar(255)
   companyId Int?
-  Company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company   Company? @relation("CompanyCoatingType", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "CoatingType_Company_fkey")
 }
 
 model Brands {
   id                  Int                   @id @default(autoincrement())
-  code                String
-  name                String
+  code                String                @db.VarChar(100)
+  name                String                @db.VarChar(255)
   companyId           Int?
-  company             Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company             Company?              @relation("CompanyBrands", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Brands_Company_fkey")
   CustomerInvoiceItem CustomerInvoiceItem[]
   Inventory           Inventory[]
   Product             Product[]
@@ -176,20 +180,20 @@ model Brands {
 model Purchase {
   id           Int            @id @default(autoincrement())
   purchaseDate DateTime
-  billNo       String
+  billNo       String         @db.VarChar(100)
   supplierId   Int
-  totalAmount  Float
-  totalCGST    Float?
-  totalSGST    Float?
-  netTotal     Float
+  totalAmount  Decimal        @db.Decimal(10, 2)
+  totalCGST    Decimal?       @db.Decimal(10, 2)
+  totalSGST    Decimal?       @db.Decimal(10, 2)
+  netTotal     Decimal        @db.Decimal(10, 2)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   companyId    Int?
   branchId     Int?
   gstStatus    Boolean        @default(false)
-  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  Company      Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Company      Company?       @relation("CompanyPurchase", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Purchase_Company_fkey")
+  supplier     Supplier       @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   items        PurchaseItem[] @relation("PurchaseToPurchaseItem")
 }
 
@@ -198,45 +202,45 @@ model PurchaseItem {
   purchaseId  Int
   productId   Int
   quantity    Int
-  rate        Float
-  amount      Float
-  cgst        Float?
-  sgst        Float?
-  discount    Float?     @default(0)
+  rate        Decimal    @db.Decimal(10, 2)
+  amount      Decimal    @db.Decimal(10, 2)
+  cgst        Decimal?   @db.Decimal(10, 2)
+  sgst        Decimal?   @db.Decimal(10, 2)
+  discount    Decimal?   @default(0) @db.Decimal(10, 2)
   frameTypeId Int?
   shapeTypeId Int?
-  modalNo     String?
+  modalNo     String?    @db.VarChar(100)
   brandId     Int?
-  netAmount   Float?
-  Brand       Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
-  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: Cascade)
-  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
+  netAmount   Decimal?   @db.Decimal(10, 2)
+  Brand       Brands?    @relation(fields: [brandId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  FrameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product     Product    @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchase    Purchase   @relation("PurchaseToPurchaseItem", fields: [purchaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ShapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model CustomerInvoice {
   id               Int                   @id @default(autoincrement())
-  customerName     String
-  customerPhone    String
+  customerName     String                @db.VarChar(255)
+  customerPhone    String                @db.VarChar(20)
   createdAt        DateTime              @default(now())
-  orderNo          String                @unique
-  totalAmount      Float
+  orderNo          String                @unique @db.VarChar(100)
+  totalAmount      Decimal               @db.Decimal(10, 2)
   updatedAt        DateTime              @updatedAt
-  advance          Float
-  balance          Float
-  customerLocation String
-  grandTotal       Float
+  advance          Decimal               @db.Decimal(10, 2)
+  balance          Decimal               @db.Decimal(10, 2)
+  customerLocation String                @db.VarChar(500)
+  grandTotal       Decimal               @db.Decimal(10, 2)
   orderDate        DateTime
-  testedBy         String?
+  testedBy         String?               @db.VarChar(255)
   companyId        Int
-  discount         Float                 @default(0)
+  discount         Decimal               @default(0) @db.Decimal(10, 2)
   branchId         Int?
-  totalCGST        Float                 @default(0)
-  totalGST         Float                 @default(0)
-  totalSGST        Float                 @default(0)
-  branch           Branch?               @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  totalCGST        Decimal               @default(0) @db.Decimal(10, 2)
+  totalGST         Decimal               @default(0) @db.Decimal(10, 2)
+  totalSGST        Decimal               @default(0) @db.Decimal(10, 2)
+  branch           Branch?               @relation(fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company          Company               @relation("CompanyCustomerInvoice", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "CustomerInvoice_Company_fkey")
   items            CustomerInvoiceItem[] @relation("InvoiceToInvoiceItem")
 }
 
@@ -245,30 +249,30 @@ model CustomerInvoiceItem {
   invoiceId       Int
   productId       Int
   quantity        Int
-  rate            Float
-  amount          Float
-  discount        Float?          @default(0)
-  modalNo         String?
+  rate            Decimal         @db.Decimal(10, 2)
+  amount          Decimal         @db.Decimal(10, 2)
+  discount        Decimal?        @default(0) @db.Decimal(10, 2)
+  modalNo         String?         @db.VarChar(100)
   frameTypeId     Int
   shapeTypeId     Int
   brandId         Int
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  cgst            Float?
-  sgst            Float?
-  leftEye         Json?
-  rightEye        Json?
-  brands          Brands          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  frameType       FrameType       @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
-  customerInvoice CustomerInvoice @relation("InvoiceToInvoiceItem", fields: [invoiceId], references: [id], onDelete: Cascade)
-  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  shapeType       ShapeType       @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
+  cgst            Decimal?        @db.Decimal(10, 2)
+  sgst            Decimal?        @db.Decimal(10, 2)
+  leftEye         String?         @db.NVarChar(max)
+  rightEye        String?         @db.NVarChar(max)
+  brands          Brands          @relation(fields: [brandId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  frameType       FrameType       @relation(fields: [frameTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customerInvoice CustomerInvoice @relation("InvoiceToInvoiceItem", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product         Product         @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shapeType       ShapeType       @relation(fields: [shapeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Inventory {
   id          Int        @id @default(autoincrement())
   productId   Int
-  modalNo     String?
+  modalNo     String?    @db.VarChar(100)
   shapeTypeId Int?
   frameTypeId Int?
   stock       Int        @default(0)
@@ -278,55 +282,43 @@ model Inventory {
   companyId   Int
   branchId    Int?
   price       Int?
-  branch      Branch?    @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  brands      Brands?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  frameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: Cascade)
-  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  shapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: Cascade)
+  branch      Branch?    @relation(fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  brands      Brands?    @relation(fields: [brandId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company     Company    @relation("CompanyInventory", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  frameType   FrameType? @relation(fields: [frameTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product     Product    @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shapeType   ShapeType? @relation(fields: [shapeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model ExpenseCategory {
   id         Int       @id @default(autoincrement())
-  name       String
+  name       String    @db.VarChar(255)
   created_at DateTime  @default(now())
   updated_at DateTime  @default(now()) @updatedAt
   companyId  Int?
   expenses   Expense[]
-  Company    Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Company    Company?  @relation("CompanyExpenseCategory", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "ExpenseCategory_Company_fkey")
 }
 
 model Expense {
   id          Int             @id @default(autoincrement())
-  amount      Float
-  description String?
+  amount      Decimal         @db.Decimal(10, 2)
+  description String?         @db.VarChar(500)
   created_at  DateTime        @default(now())
   updated_at  DateTime        @updatedAt
   categoryId  Int
   companyId   Int?
-  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  Company     Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Company     Company?        @relation("CompanyExpense", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Expense_Company_fkey")
 }
 
 model Prescription {
   id        Int      @id @default(autoincrement())
-  value     Float
-  field     String
-  side      String
+  value     Decimal  @db.Decimal(10, 2)
+  field     String   @db.VarChar(50)
+  side      String   @db.VarChar(50)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([side, field, value])
-}
-
-enum EyeSide {
-  left
-  right
-}
-
-enum PrescriptionField {
-  SPH
-  CYL
-  AXIS
-  ADD
 }

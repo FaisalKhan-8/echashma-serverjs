@@ -387,6 +387,12 @@ const createCustomerInvoice = async (req, res, next) => {
           finalAmount += gstAmount;
         }
 
+        // Stringify the prescription objects
+        const leftEyeStr = item.leftEye ? JSON.stringify(item.leftEye) : null;
+        const rightEyeStr = item.rightEye
+          ? JSON.stringify(item.rightEye)
+          : null;
+
         return {
           productId: item.productId,
           quantity: item.quantity,
@@ -399,8 +405,8 @@ const createCustomerInvoice = async (req, res, next) => {
           frameTypeId: item.frameTypeId,
           shapeTypeId: item.shapeId,
           brandId: item.brandId,
-          leftEye: item.leftEye,
-          rightEye: item.rightEye,
+          leftEye: leftEyeStr,
+          rightEye: rightEyeStr,
         };
       });
     };
@@ -550,13 +556,11 @@ async function getAllCustomerInvoices(req, res, next) {
           {
             orderNo: {
               contains: searchTerm,
-              mode: 'insensitive',
             },
           },
           {
             customerName: {
               contains: searchTerm,
-              mode: 'insensitive',
             },
           },
         ],
@@ -587,13 +591,11 @@ async function getAllCustomerInvoices(req, res, next) {
           {
             orderNo: {
               contains: searchTerm,
-              mode: 'insensitive',
             },
           },
           {
             customerName: {
               contains: searchTerm,
-              mode: 'insensitive',
             },
           },
         ],

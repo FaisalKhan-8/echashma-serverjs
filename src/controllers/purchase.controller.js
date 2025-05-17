@@ -814,12 +814,12 @@ exports.getAllPurchases = async (req, res, next) => {
     const searchClause = search
       ? {
           OR: [
-            { billNo: { contains: search, mode: 'insensitive' } },
-            { supplier: { name: { contains: search, mode: 'insensitive' } } },
+            { billNo: { contains: search } },
+            { supplier: { name: { contains: search } } },
             {
               items: {
                 some: {
-                  product: { name: { contains: search, mode: 'insensitive' } },
+                  product: { name: { contains: search } },
                 },
               },
             },

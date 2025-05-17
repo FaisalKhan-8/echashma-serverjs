@@ -83,7 +83,6 @@ const getAllProducts = async (req, res) => {
     let whereClause = {
       name: {
         contains: search, // Search by product name
-        mode: 'insensitive', // Case-insensitive search
       },
     };
 

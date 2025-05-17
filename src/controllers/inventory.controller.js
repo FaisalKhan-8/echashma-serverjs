@@ -278,7 +278,7 @@ const getInventoryProducts = async (req, res, next) => {
     // Build a filter for the Product table based on search if provided
     const productFilter = {
       id: { in: productIds },
-      ...(search && { name: { contains: search, mode: 'insensitive' } }),
+      ...(search && { name: { contains: search } }),
     };
 
     // Optional: Get total count for pagination info
