@@ -34,7 +34,7 @@ model Company {
   contactPerson   String            @db.VarChar(255)
   phone           String?           @db.VarChar(20)
   email           String            @unique @db.VarChar(255)
-  gst             String?           @unique @db.VarChar(50)
+  gst             String?           @db.VarChar(50)
   pancard         String?           @db.VarChar(50)
   aadhaarcard     String?           @db.VarChar(50)
   created_at      DateTime          @default(now())
