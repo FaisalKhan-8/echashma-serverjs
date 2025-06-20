@@ -1,5 +1,6 @@
 const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
+const jwt = require('jsonwebtoken');
 
 // const createCustomerInvoice = async (req, res, next) => {
 //   const { companyId, branchId: userBranchId, role } = req.user;
@@ -714,8 +715,84 @@ const getCustomerInvoiceById = async (req, res, next) => {
   }
 };
 
+const verifyPhone = async (req, res) => {
+  const { invoiceId, phone } = req.body;
+
+  try {
+    // Validate invoice exists with this phone
+    const invoice = await db.customerInvoice.findFirst({
+      where: {
+        id: parseInt(invoiceId),
+        customerPhone: phone.replace(/\D/g, ''),
+      },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found with this phone number',
+      });
+    }
+
+    // Generate access token (valid for 1 hour)
+    const token = jwt.sign({ invoiceId, phone }, process.env.JWT_SECRET, {
+      expiresIn: '1h',
+    });
+
+    res.json({
+      success: true,
+      token,
+    });
+  } catch (error) {
+    console.error('Error verifying phone:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+const getInvoice = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Token required' });
+
+    console.log('Token:', token);
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    console.log('Decoded token:', decoded);
+
+    const invoice = await db.customerInvoice.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: {
+        items: {
+          include: { product: true },
+        },
+        company: true,
+        branch: true,
+      },
+    });
+
+    if (
+      !invoice ||
+      invoice.id !== parseInt(decoded.invoiceId) ||
+      invoice.customerPhone !== decoded.phone
+    ) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
+    res.json(invoice);
+  } catch (error) {
+    console.error(error);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
 module.exports = {
   createCustomerInvoice,
   getAllCustomerInvoices,
   getCustomerInvoiceById,
+  verifyPhone,
+  getInvoice,
 };
