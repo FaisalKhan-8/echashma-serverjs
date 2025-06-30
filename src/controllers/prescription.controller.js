@@ -102,9 +102,9 @@ async function getAllPrescriptions(req, res, next) {
 
     // 2. Custom sort:
     const sortedPrescriptions = prescriptions.sort((a, b) => {
-      // Both values are negative → sort ascending (-7 before -6)
+      // Both values are negative → sort descending (-6 before -7)
       if (a.value < 0 && b.value < 0) {
-        return a.value - b.value;
+        return b.value - a.value;
       }
       // One negative, one non-negative → negatives come first
       else if (a.value < 0) {
@@ -112,9 +112,9 @@ async function getAllPrescriptions(req, res, next) {
       } else if (b.value < 0) {
         return 1;
       }
-      // Both non-negative → sort descending (5 before 3)
+      // Both non-negative → sort ascending (3 before 5)
       else {
-        return b.value - a.value;
+        return a.value - b.value;
       }
     });
 
