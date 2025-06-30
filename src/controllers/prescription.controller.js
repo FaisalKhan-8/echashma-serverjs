@@ -35,7 +35,10 @@ async function createPrescription(req, res, next) {
     console.log('Prescription data is valid.');
 
     // Round the value before saving it to the database (if needed)
-    const roundedValue = Number(validatedData.value.toFixed(2));
+    const roundedValue =
+      validatedData.value !== null
+        ? Number(validatedData.value.toFixed(2))
+        : null;
 
     // Check if a prescription with the same side, field, and value already exists
     const existingPrescription = await db.prescription.findUnique({
@@ -75,38 +78,53 @@ async function createPrescription(req, res, next) {
     if (error instanceof z.ZodError) {
       // Handle validation errors from Zod
       console.error('Validation errors:', error.errors);
-      throw next(new AppError(error.errors, 400));
+      next(new AppError(error.errors.map((e) => e.message).join(', '), 400));
     } else if (error instanceof AppError) {
       // Custom application errors (like unique constraint violation)
       console.error('AppError:', error.message);
-      throw next(error);
+      next(error);
     } else {
       // Handle unexpected errors (e.g., database errors)
       console.error('Unexpected error:', error);
-      throw next(new AppError(error.message || 'Internal server error', 500));
+      next(new AppError('Internal server error', 500));
     }
   }
 }
 
 async function getAllPrescriptions(req, res, next) {
   try {
-    // Fetch all prescriptions from the database
+    // 1. Fetch all prescriptions (unsorted)
     const prescriptions = await db.prescription.findMany();
 
-    console.log(prescriptions, 'prescriptions');
-
-    // Check if prescriptions exist
     if (!prescriptions || prescriptions.length === 0) {
-      throw next(new AppError('No prescriptions found', 404));
+      return next(new AppError('No prescriptions found', 404));
     }
 
-    // Send a response with all prescriptions
+    // 2. Custom sort:
+    const sortedPrescriptions = prescriptions.sort((a, b) => {
+      // Both values are negative → sort ascending (-7 before -6)
+      if (a.value < 0 && b.value < 0) {
+        return a.value - b.value;
+      }
+      // One negative, one non-negative → negatives come first
+      else if (a.value < 0) {
+        return -1;
+      } else if (b.value < 0) {
+        return 1;
+      }
+      // Both non-negative → sort descending (5 before 3)
+      else {
+        return b.value - a.value;
+      }
+    });
+
     res.status(200).json({
       status: 'success',
-      data: prescriptions,
+      data: sortedPrescriptions,
     });
   } catch (error) {
-    throw next(new AppError(error.message, 500));
+    console.error('Error fetching prescriptions:', error);
+    next(new AppError('Failed to fetch prescriptions', 500));
   }
 }
 
