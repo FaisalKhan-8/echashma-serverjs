@@ -1,6 +1,135 @@
 const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 
+// const getStock = async (req, res, next) => {
+//   const { companyId, branchId: userBranchId, role } = req.user;
+//   const { branchId: queryBranchId } = req.query;
+//   const { productId, brandId, modalNo, frameTypeId, shapeTypeId } = req.body;
+
+//   try {
+//     // Validate required parameters
+//     if (!productId) {
+//       throw new AppError('Product ID is required', 400);
+//     }
+
+//     // Validate productId format
+//     const parsedProductId = parseInt(productId, 10);
+//     if (isNaN(parsedProductId)) {
+//       throw new AppError('Invalid Product ID format', 400);
+//     }
+
+//     // Branch ID resolution and validation
+//     let branchId;
+//     switch (role) {
+//       case 'MANAGER':
+//         branchId = parseInt(userBranchId, 10);
+//         if (isNaN(branchId)) {
+//           throw new AppError('Invalid manager branch ID', 400);
+//         }
+//         break;
+
+//       case 'SUPER_ADMIN':
+//       case 'ADMIN':
+//       case 'SUBADMIN':
+//         if (!queryBranchId) {
+//           throw new AppError('Branch ID query parameter is required', 400);
+//         }
+//         branchId = parseInt(queryBranchId, 10);
+//         if (isNaN(branchId)) {
+//           throw new AppError('Invalid branch ID format', 400);
+//         }
+//         break;
+
+//       default:
+//         throw new AppError('Unauthorized access for this role', 403);
+//     }
+
+//     // Main logic
+//     if (brandId && frameTypeId && shapeTypeId) {
+//       // Validate numeric parameters
+//       const numericParams = {
+//         brandId: parseInt(brandId, 10),
+//         frameTypeId: parseInt(frameTypeId, 10),
+//         shapeTypeId: parseInt(shapeTypeId, 10),
+//       };
+
+//       for (const [param, value] of Object.entries(numericParams)) {
+//         if (isNaN(value)) {
+//           throw new AppError(`Invalid ${param} format`, 400);
+//         }
+//       }
+
+//       const inventory = await db.inventory.findFirst({
+//         where: {
+//           productId: parsedProductId,
+//           ...numericParams,
+//           companyId,
+//           branchId,
+//           ...(modalNo && { modalNo }),
+//         },
+//         select: { stock: true, price: true, modalNo: true },
+//       });
+
+//       return res.json({
+//         stock: inventory?.stock || 0,
+//         price: inventory?.price ?? null,
+//         modalNo: inventory?.modalNo ?? null,
+//       });
+//     }
+
+//     // find first
+
+//     // MODE A: Aggregation mode
+//     const inventoryRecords = await db.inventory.findMany({
+//       where: {
+//         productId: parsedProductId,
+//         companyId,
+//         branchId,
+//         stock: { gt: 0 }, // Only consider items with stock
+//       },
+//       distinct: ['frameTypeId', 'shapeTypeId', 'brandId'],
+//       include: {
+//         frameType: { select: { id: true, name: true } },
+//         shapeType: { select: { id: true, name: true } },
+//         brands: { select: { id: true, name: true } },
+//       },
+//     });
+
+//     if (inventoryRecords.length === 0) {
+//       throw new AppError('No inventory found for this product', 404);
+//     }
+
+//     // Map results using reduce for better performance
+//     const result = inventoryRecords.reduce(
+//       (acc, curr) => {
+//         if (curr.frameType) acc.frameTypes.add(curr.frameType);
+//         if (curr.shapeType) acc.shapeTypes.add(curr.shapeType);
+//         if (curr.brands) acc.brands.add(curr.brands);
+//         return acc;
+//       },
+//       {
+//         frameTypes: new Set(),
+//         shapeTypes: new Set(),
+//         brands: new Set(),
+//       }
+//     );
+
+//     res.json({
+//       productId: parsedProductId,
+//       frameTypes: Array.from(result.frameTypes),
+//       shapeTypes: Array.from(result.shapeTypes),
+//       brands: Array.from(result.brands),
+//     });
+//   } catch (error) {
+//     console.error('Stock check failed:', error);
+//     next(
+//       error instanceof AppError
+//         ? error
+//         : new AppError('Failed to retrieve stock information', 500)
+//     );
+//   }
+// };
+
 const getStock = async (req, res, next) => {
   const { companyId, branchId: userBranchId, role } = req.user;
   const { branchId: queryBranchId } = req.query;
@@ -44,7 +173,7 @@ const getStock = async (req, res, next) => {
         throw new AppError('Unauthorized access for this role', 403);
     }
 
-    // Main logic
+    // Specific item lookup logic
     if (brandId && frameTypeId && shapeTypeId) {
       // Validate numeric parameters
       const numericParams = {
@@ -77,15 +206,13 @@ const getStock = async (req, res, next) => {
       });
     }
 
-    // find first
-
-    // MODE A: Aggregation mode
+    // Aggregation mode - get available options
     const inventoryRecords = await db.inventory.findMany({
       where: {
         productId: parsedProductId,
         companyId,
         branchId,
-        stock: { gt: 0 }, // Only consider items with stock
+        stock: { gt: 0 },
       },
       distinct: ['frameTypeId', 'shapeTypeId', 'brandId'],
       include: {
@@ -99,26 +226,40 @@ const getStock = async (req, res, next) => {
       throw new AppError('No inventory found for this product', 404);
     }
 
-    // Map results using reduce for better performance
-    const result = inventoryRecords.reduce(
-      (acc, curr) => {
-        if (curr.frameType) acc.frameTypes.add(curr.frameType);
-        if (curr.shapeType) acc.shapeTypes.add(curr.shapeType);
-        if (curr.brands) acc.brands.add(curr.brands);
-        return acc;
-      },
-      {
-        frameTypes: new Set(),
-        shapeTypes: new Set(),
-        brands: new Set(),
-      }
+    // Deduplicate using object properties
+    const deduplicate = (arr, key) => {
+      const seen = new Set();
+      return arr.filter((item) => {
+        const compositeKey = `${item.id}:${item.name}`;
+        if (seen.has(compositeKey)) {
+          return false;
+        }
+        seen.add(compositeKey);
+        return true;
+      });
+    };
+
+    // Extract and deduplicate each type
+    const frameTypes = deduplicate(
+      inventoryRecords.map((item) => item.frameType).filter(Boolean),
+      'frameType'
+    );
+
+    const shapeTypes = deduplicate(
+      inventoryRecords.map((item) => item.shapeType).filter(Boolean),
+      'shapeType'
+    );
+
+    const brands = deduplicate(
+      inventoryRecords.map((item) => item.brands).filter(Boolean),
+      'brands'
     );
 
     res.json({
       productId: parsedProductId,
-      frameTypes: Array.from(result.frameTypes),
-      shapeTypes: Array.from(result.shapeTypes),
-      brands: Array.from(result.brands),
+      frameTypes,
+      shapeTypes,
+      brands,
     });
   } catch (error) {
     console.error('Stock check failed:', error);
