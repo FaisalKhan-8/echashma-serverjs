@@ -563,6 +563,11 @@ async function getAllCustomerInvoices(req, res, next) {
               contains: searchTerm,
             },
           },
+          {
+            customerPhone: {
+              contains: searchTerm,
+            },
+          },
         ],
       },
       include: {
