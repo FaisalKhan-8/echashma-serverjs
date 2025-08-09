@@ -334,7 +334,7 @@ exports.createPurchase = async (req, res, next) => {
               netAmount: item.netAmount,
               modalNo: item.modalNo,
               frameTypeId: item.frameTypeId,
-              shapeTypeId: item.shapeId,
+              // shapeTypeId: item.shapeId,
               brandId: item.brandId,
             })),
           },
@@ -345,7 +345,7 @@ exports.createPurchase = async (req, res, next) => {
               product: true,
               Brand: true,
               FrameType: true,
-              ShapeType: true,
+              // ShapeType: true,
             },
           },
           supplier: true,
@@ -360,7 +360,7 @@ exports.createPurchase = async (req, res, next) => {
           const where = {
             productId: item.productId,
             frameTypeId: item.frameTypeId,
-            shapeTypeId: item.shapeId,
+            // shapeTypeId: item.shapeId,
             brandId: item.brandId,
             companyId,
             branchId,
@@ -413,7 +413,7 @@ exports.createPurchase = async (req, res, next) => {
         name: item.product.name,
         brand: item.Brand.name,
         frameType: item.FrameType.name,
-        shape: item.ShapeType.name,
+        // shape: item.ShapeType.name,
         quantity: item.quantity,
         rate: item.rate,
         discount: item.discount,
@@ -499,7 +499,7 @@ exports.updatePurchase = async (req, res, next) => {
     const updateData = {
       purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
       billNo: billNo ?? undefined,
-      supplierId: supplierId ?? undefined,
+      // supplierId: supplierId ?? undefined,
       branchId,
     };
 
@@ -546,7 +546,7 @@ exports.updatePurchase = async (req, res, next) => {
                   (processedItem.sgst || 0),
               // Use original item data for these fields to ensure they are preserved
               frameTypeId: originalItem.frameTypeId ?? null,
-              shapeTypeId: originalItem.shapeTypeId ?? null,
+              // shapeTypeId: originalItem.shapeTypeId ?? null,
               brandId: originalItem.brandId ?? null,
               modalNo: originalItem.modalNo ?? null,
             };
@@ -569,7 +569,7 @@ exports.updatePurchase = async (req, res, next) => {
             const where = {
               productId: item.productId,
               frameTypeId: item.frameTypeId,
-              shapeTypeId: item.shapeTypeId,
+              // shapeTypeId: item.shapeTypeId,
               brandId: item.brandId,
               companyId,
               branchId,
@@ -614,7 +614,7 @@ async function reverseInventory(items, companyId, branchId) {
         where: {
           productId: item.productId,
           frameTypeId: item.frameTypeId,
-          shapeTypeId: item.shapeTypeId,
+          // shapeTypeId: item.shapeTypeId,
           brandId: item.brandId,
           companyId,
           branchId,
@@ -645,7 +645,7 @@ async function processPurchaseItems(items, companyId, gstStatus) {
       rate,
       discount = 0,
       frameTypeId,
-      shapeId,
+      // shapeId,
       brandId,
     } = item;
 
@@ -689,7 +689,7 @@ async function processPurchaseItems(items, companyId, gstStatus) {
       cgst: lineCGST,
       sgst: lineSGST,
       frameTypeId,
-      shapeTypeId: shapeId,
+      // shapeTypeId: shapeId,
       brandId,
     });
   }
@@ -706,7 +706,7 @@ async function updateInventory(prisma, items, companyId, branchId) {
       const where = {
         productId: item.productId,
         frameTypeId: item.frameTypeId,
-        shapeTypeId: item.shapeTypeId,
+        // shapeTypeId: item.shapeTypeId,
         brandId: item.brandId,
         companyId,
         branchId,
@@ -846,7 +846,7 @@ exports.getAllPurchases = async (req, res, next) => {
               product: true,
               Brand: true, // This is correct as per PurchaseItem model
               FrameType: true,
-              ShapeType: true,
+              // ShapeType: true,
             },
           },
           supplier: true,
@@ -915,7 +915,7 @@ exports.getPurchaseById = async (req, res) => {
             product: true,
             Brand: true,
             FrameType: true,
-            ShapeType: true,
+            // ShapeType: true,
           },
         },
         supplier: true,

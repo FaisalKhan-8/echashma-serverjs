@@ -133,7 +133,7 @@ const db = require('../utils/db.config');
 const getStock = async (req, res, next) => {
   const { companyId, branchId: userBranchId, role } = req.user;
   const { branchId: queryBranchId } = req.query;
-  const { productId, brandId, modalNo, frameTypeId, shapeTypeId } = req.body;
+  const { productId, brandId, modalNo, frameTypeId } = req.body;
 
   try {
     // Validate required parameters
@@ -174,12 +174,12 @@ const getStock = async (req, res, next) => {
     }
 
     // Specific item lookup logic
-    if (brandId && frameTypeId && shapeTypeId) {
+    if (brandId && frameTypeId) {
       // Validate numeric parameters
       const numericParams = {
         brandId: parseInt(brandId, 10),
         frameTypeId: parseInt(frameTypeId, 10),
-        shapeTypeId: parseInt(shapeTypeId, 10),
+        // shapeTypeId: parseInt(shapeTypeId, 10),
       };
 
       for (const [param, value] of Object.entries(numericParams)) {
@@ -214,10 +214,10 @@ const getStock = async (req, res, next) => {
         branchId,
         stock: { gt: 0 },
       },
-      distinct: ['frameTypeId', 'shapeTypeId', 'brandId'],
+      distinct: ['frameTypeId', 'brandId'],
       include: {
         frameType: { select: { id: true, name: true } },
-        shapeType: { select: { id: true, name: true } },
+        // shapeType: { select: { id: true, name: true } },
         brands: { select: { id: true, name: true } },
       },
     });
@@ -245,10 +245,10 @@ const getStock = async (req, res, next) => {
       'frameType'
     );
 
-    const shapeTypes = deduplicate(
-      inventoryRecords.map((item) => item.shapeType).filter(Boolean),
-      'shapeType'
-    );
+    // const shapeTypes = deduplicate(
+    //   inventoryRecords.map((item) => item.shapeType).filter(Boolean),
+    //   'shapeType'
+    // );
 
     const brands = deduplicate(
       inventoryRecords.map((item) => item.brands).filter(Boolean),
@@ -258,7 +258,7 @@ const getStock = async (req, res, next) => {
     res.json({
       productId: parsedProductId,
       frameTypes,
-      shapeTypes,
+      // shapeTypes,
       brands,
     });
   } catch (error) {
@@ -307,7 +307,7 @@ const getProductDetails = async (req, res, next) => {
           where: { branchId, companyId },
           include: {
             frameType: true,
-            shapeType: true,
+            // shapeType: true,
             brands: true,
           },
         },
@@ -325,31 +325,31 @@ const getProductDetails = async (req, res, next) => {
       frameType: inv.frameType
         ? { id: inv.frameType.id, name: inv.frameType.name }
         : null,
-      shapeType: inv.shapeType
-        ? { id: inv.shapeType.id, name: inv.shapeType.name }
-        : null,
+      // shapeType: inv.shapeType
+      //   ? { id: inv.shapeType.id, name: inv.shapeType.name }
+      //   : null,
       brand: inv.brands ? { id: inv.brands.id, name: inv.brands.name } : null,
     }));
 
     // Aggregate distinct frame types, shape types, and brands from the inventory details.
     const frameTypeMap = {};
-    const shapeTypeMap = {};
+    // const shapeTypeMap = {};
     const brandMap = {};
 
     inventoryDetails.forEach((item) => {
       if (item.frameType && !frameTypeMap[item.frameType.id]) {
         frameTypeMap[item.frameType.id] = item.frameType;
       }
-      if (item.shapeType && !shapeTypeMap[item.shapeType.id]) {
-        shapeTypeMap[item.shapeType.id] = item.shapeType;
-      }
+      // if (item.shapeType && !shapeTypeMap[item.shapeType.id]) {
+      //   shapeTypeMap[item.shapeType.id] = item.shapeType;
+      // }
       if (item.brand && !brandMap[item.brand.id]) {
         brandMap[item.brand.id] = item.brand;
       }
     });
 
     const frameTypes = Object.values(frameTypeMap);
-    const shapeTypes = Object.values(shapeTypeMap);
+    // const shapeTypes = Object.values(shapeTypeMap);
     const brands = Object.values(brandMap);
 
     // Prepare the final response with aggregated arrays
@@ -358,7 +358,7 @@ const getProductDetails = async (req, res, next) => {
       code: product.code,
       name: product.name,
       frameTypes, // All distinct frame types
-      shapeTypes, // All distinct shape types
+      // shapeTypes, // All distinct shape types
       brands, // All distinct brands
       inventory: inventoryDetails, // Full inventory details (optional)
     };

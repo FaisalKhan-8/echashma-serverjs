@@ -303,10 +303,8 @@ const createCustomerInvoice = async (req, res, next) => {
     // Check required product fields
     const missingProductFields = products.some(
       (product) =>
-        !product.productId ||
-        !product.brandId ||
-        !product.frameTypeId ||
-        !product.shapeId
+        !product.productId || !product.brandId || !product.frameTypeId
+      // !product.shapeId
     );
     if (missingProductFields) {
       throw new AppError('All product fields are required', 400);
@@ -404,7 +402,8 @@ const createCustomerInvoice = async (req, res, next) => {
           sgst: Number(sgst.toFixed(2)),
           modalNo: item.modalNo,
           frameTypeId: item.frameTypeId,
-          shapeTypeId: item.shapeId,
+          visionTypeId: item.visionTypeId,
+          // shapeTypeId: item.shapeId,
           brandId: item.brandId,
           leftEye: leftEyeStr,
           rightEye: rightEyeStr,
@@ -432,7 +431,7 @@ const createCustomerInvoice = async (req, res, next) => {
         const inventory = await prisma.inventory.findFirst({
           where: {
             productId: product.productId,
-            shapeTypeId: product.shapeId,
+            // shapeTypeId: product.shapeId,
             brandId: product.brandId,
             frameTypeId: product.frameTypeId,
             companyId,
@@ -572,7 +571,8 @@ async function getAllCustomerInvoices(req, res, next) {
             product: true, // Include related product details
             brands: true,
             frameType: true, // Include related frameType details
-            shapeType: true, // Include related shapeType details
+            visionType: true,
+            // shapeType: true, // Include related shapeType details
           },
         },
       },
@@ -656,7 +656,8 @@ const getCustomerInvoiceById = async (req, res, next) => {
               product: true, // Include related product details
               brands: true,
               frameType: true, // Include related frameType details
-              shapeType: true, // Include related shapeType details
+              visionType: true,
+              // shapeType: true, // Include related shapeType details
             },
           },
         },
@@ -693,7 +694,8 @@ const getCustomerInvoiceById = async (req, res, next) => {
             product: true, // Include related product details
             brands: true, // Corrected to 'brands'
             frameType: true, // Include related frameType details
-            shapeType: true, // Include related shapeType details
+            visionType: true,
+            // shapeType: true, // Include related shapeType details
           },
         },
       },
