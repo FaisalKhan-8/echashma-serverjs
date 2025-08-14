@@ -34,9 +34,7 @@ const CreateUser = async (req, res, next) => {
 
     // Validate required fields manually
     if (!password) {
-      return next(
-        new AppError('Missing required fields: password is mandatory', 400)
-      );
+      throw new AppError('Missing required fields: password is mandatory', 400);
     }
 
     // Extract file paths for pancard and aadhaarcard
@@ -105,7 +103,7 @@ const CreateUser = async (req, res, next) => {
         });
 
         if (existingUser) {
-          return next(new AppError('User already exists with this email', 400));
+          throw new AppError('User already exists with this email', 400);
         }
 
         const existingCompanyEmail = await prisma.company.findUnique({

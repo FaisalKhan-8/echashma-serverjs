@@ -485,6 +485,230 @@ const createCustomerInvoice = async (req, res, next) => {
   }
 };
 
+const updateCustomerInvoice = async (req, res, next) => {
+  const { companyId, branchId: userBranchId, role } = req.user;
+  const { branchId: queryBranchId } = req.query;
+  const invoiceId = parseInt(req.params.id, 10);
+
+  try {
+    // Validate request body
+    if (!req.body || Object.keys(req.body).length === 0) {
+      throw new AppError('Request body is empty', 400);
+    }
+
+    // Destructure request data
+    const { products, orderDate, gstStatus, ...invoiceData } = req.body;
+
+    // Validate products array
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      throw new AppError('Valid products array is required', 400);
+    }
+
+    // Check required product fields
+    const missingProductFields = products.some(
+      (product) =>
+        !product.productId || !product.brandId || !product.frameTypeId
+    );
+    if (missingProductFields) {
+      throw new AppError('All product fields are required', 400);
+    }
+
+    // Validate company association
+    if (!companyId) {
+      throw new AppError('User company not found', 400);
+    }
+
+    // Determine branch ID based on role
+    let branchId;
+    if (role === 'MANAGER') {
+      branchId = parseInt(userBranchId, 10);
+    } else if (['SUPER_ADMIN', 'ADMIN', 'SUBADMIN'].includes(role)) {
+      if (!queryBranchId) throw new AppError('Branch ID required', 400);
+      branchId = parseInt(queryBranchId, 10);
+    } else {
+      throw new AppError('Unauthorized role', 403);
+    }
+
+    // Get existing invoice
+    const existingInvoice = await db.customerInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true },
+    });
+
+    if (!existingInvoice) {
+      throw new AppError('Invoice not found', 404);
+    }
+
+    // Database transaction
+    const updatedInvoice = await db.$transaction(async (prisma) => {
+      // Revert old inventory quantities
+      for (const item of existingInvoice.items) {
+        const inventory = await prisma.inventory.findFirst({
+          where: {
+            productId: item.productId,
+            brandId: item.brandId,
+            frameTypeId: item.frameTypeId,
+            companyId,
+            branchId,
+          },
+        });
+
+        if (!inventory) {
+          throw new AppError(
+            `Inventory not found for product ${item.productId} (revert)`,
+            400
+          );
+        }
+
+        await prisma.inventory.update({
+          where: { id: inventory.id },
+          data: { stock: inventory.stock + item.quantity },
+        });
+      }
+
+      // Financial calculation (identical to create API)
+      const processFinancials = () => {
+        // Phase 1: Calculate item-level discounts
+        const itemsWithDiscounts = products.map((item) => {
+          const amountBeforeDiscount = item.price * item.quantity;
+          const itemDiscount =
+            ((item.discount || 0) / 100) * amountBeforeDiscount;
+          return {
+            ...item,
+            netAmount: amountBeforeDiscount - itemDiscount,
+          };
+        });
+
+        // Calculate subtotal before overall discount
+        const subtotalBeforeOverall = itemsWithDiscounts.reduce(
+          (sum, item) => sum + item.netAmount,
+          0
+        );
+
+        // Apply overall discount
+        const overallDiscount =
+          ((invoiceData.discount || 0) / 100) * subtotalBeforeOverall;
+        const subtotalAfterDiscount = subtotalBeforeOverall - overallDiscount;
+
+        // Phase 2: Calculate GST and final amounts
+        return itemsWithDiscounts.map((item) => {
+          // Calculate proportional discount
+          const itemProportion = item.netAmount / subtotalBeforeOverall || 0;
+          const itemShareOfDiscount = overallDiscount * itemProportion;
+
+          // Calculate taxable amount after all discounts
+          const taxableAmount = item.netAmount - itemShareOfDiscount;
+
+          // Calculate GST if applicable
+          let cgst = 0;
+          let sgst = 0;
+          let finalAmount = taxableAmount;
+
+          if (gstStatus) {
+            const gstAmount = taxableAmount * 0.18;
+            cgst = gstAmount / 2;
+            sgst = gstAmount / 2;
+            finalAmount += gstAmount;
+          }
+
+          // Stringify the prescription objects
+          const leftEyeStr = item.leftEye ? JSON.stringify(item.leftEye) : null;
+          const rightEyeStr = item.rightEye
+            ? JSON.stringify(item.rightEye)
+            : null;
+
+          return {
+            productId: item.productId,
+            quantity: item.quantity,
+            rate: item.price,
+            discount: item.discount || 0,
+            amount: Number(finalAmount.toFixed(2)),
+            cgst: Number(cgst.toFixed(2)),
+            sgst: Number(sgst.toFixed(2)),
+            modalNo: item.modalNo,
+            frameTypeId: item.frameTypeId,
+            visionTypeId: item.visionTypeId,
+            brandId: item.brandId,
+            leftEye: leftEyeStr,
+            rightEye: rightEyeStr,
+          };
+        });
+      };
+
+      // Process item calculations
+      const items = processFinancials();
+
+      // Calculate totals
+      const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+      const totalCGST = items.reduce((sum, item) => sum + item.cgst, 0);
+      const totalSGST = items.reduce((sum, item) => sum + item.sgst, 0);
+      const balanceAmount = totalAmount - (invoiceData.advance || 0);
+
+      // Validate dates
+      const orderDateObj = new Date(orderDate);
+      if (isNaN(orderDateObj)) throw new AppError('Invalid order date', 400);
+
+      // Update inventory with new quantities
+      for (const product of products) {
+        const inventory = await prisma.inventory.findFirst({
+          where: {
+            productId: product.productId,
+            brandId: product.brandId,
+            frameTypeId: product.frameTypeId,
+            companyId,
+            branchId,
+          },
+        });
+
+        if (!inventory) {
+          throw new AppError(
+            `Inventory not found for product ${product.productId}`,
+            400
+          );
+        }
+
+        if (inventory.stock < product.quantity) {
+          throw new AppError(
+            `Insufficient stock for product ${product.productId} (${inventory.stock} available)`,
+            400
+          );
+        }
+
+        await prisma.inventory.update({
+          where: { id: inventory.id },
+          data: { stock: inventory.stock - product.quantity },
+        });
+      }
+
+      // CORRECTED: Use proper model name from your schema
+      await prisma.customerInvoiceItem.deleteMany({
+        where: { invoiceId: existingInvoice.id },
+      });
+
+      // Update invoice
+      return await prisma.customerInvoice.update({
+        where: { id: existingInvoice.id },
+        data: {
+          ...invoiceData,
+          orderDate: orderDateObj,
+          totalAmount: Number(totalAmount.toFixed(2)),
+          totalCGST: Number(totalCGST.toFixed(2)),
+          totalSGST: Number(totalSGST.toFixed(2)),
+          totalGST: Number((totalCGST + totalSGST).toFixed(2)),
+          advance: Number((invoiceData.advance || 0).toFixed(2)),
+          balance: Number(balanceAmount.toFixed(2)),
+          items: { create: items },
+        },
+        include: { items: true },
+      });
+    });
+
+    return res.status(200).json(updatedInvoice);
+  } catch (error) {
+    next(error);
+  }
+};
+
 async function getAllCustomerInvoices(req, res, next) {
   try {
     // Get companyId, branchId from the token and role from the authenticated user
@@ -798,6 +1022,7 @@ const getInvoice = async (req, res) => {
 
 module.exports = {
   createCustomerInvoice,
+  updateCustomerInvoice,
   getAllCustomerInvoices,
   getCustomerInvoiceById,
   verifyPhone,
