@@ -15,6 +15,7 @@ const customerInvoiceRoutes = require('./customerInvoice.routes');
 const prescriptionRoutes = require('./prescription.routes');
 const BrandRoutes = require('./brand.routes');
 const InventoryRoutes = require('./inventory.routes');
+const WhatsappRoutes = require('./whatsapp.routes');
 
 const rootRouter = Router();
 
@@ -34,5 +35,6 @@ rootRouter.use('/customer-invoice', customerInvoiceRoutes);
 rootRouter.use('/prescriptions', prescriptionRoutes);
 rootRouter.use('/brand', BrandRoutes);
 rootRouter.use('/inventory', InventoryRoutes);
+rootRouter.use('/whatsapp', WhatsappRoutes);
 
 module.exports = rootRouter;

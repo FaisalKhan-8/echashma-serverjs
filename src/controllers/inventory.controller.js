@@ -136,56 +136,45 @@ const getStock = async (req, res, next) => {
   const { productId, brandId, modalNo, frameTypeId } = req.body;
 
   try {
-    // Validate required parameters
-    if (!productId) {
-      throw new AppError('Product ID is required', 400);
-    }
+    if (!productId) throw new AppError('Product ID is required', 400);
 
-    // Validate productId format
     const parsedProductId = parseInt(productId, 10);
-    if (isNaN(parsedProductId)) {
+    if (isNaN(parsedProductId))
       throw new AppError('Invalid Product ID format', 400);
-    }
 
-    // Branch ID resolution and validation
+    // Branch ID resolution
     let branchId;
     switch (role) {
       case 'MANAGER':
         branchId = parseInt(userBranchId, 10);
-        if (isNaN(branchId)) {
-          throw new AppError('Invalid manager branch ID', 400);
-        }
         break;
-
       case 'SUPER_ADMIN':
       case 'ADMIN':
       case 'SUBADMIN':
-        if (!queryBranchId) {
+        if (!queryBranchId)
           throw new AppError('Branch ID query parameter is required', 400);
-        }
         branchId = parseInt(queryBranchId, 10);
-        if (isNaN(branchId)) {
-          throw new AppError('Invalid branch ID format', 400);
-        }
         break;
-
       default:
         throw new AppError('Unauthorized access for this role', 403);
     }
+    if (isNaN(branchId)) throw new AppError('Invalid branch ID format', 400);
 
-    // Specific item lookup logic
+    // ✅ Check branch negativeBilling flag
+    const branch = await db.branch.findUnique({
+      where: { id: branchId },
+      select: { negativeBilling: true },
+    });
+    const allowNegative = branch?.negativeBilling ?? false;
+
+    // Specific item lookup
     if (brandId && frameTypeId) {
-      // Validate numeric parameters
       const numericParams = {
         brandId: parseInt(brandId, 10),
         frameTypeId: parseInt(frameTypeId, 10),
-        // shapeTypeId: parseInt(shapeTypeId, 10),
       };
-
       for (const [param, value] of Object.entries(numericParams)) {
-        if (isNaN(value)) {
-          throw new AppError(`Invalid ${param} format`, 400);
-        }
+        if (isNaN(value)) throw new AppError(`Invalid ${param} format`, 400);
       }
 
       const inventory = await db.inventory.findFirst({
@@ -199,6 +188,11 @@ const getStock = async (req, res, next) => {
         select: { stock: true, price: true, modalNo: true },
       });
 
+      // ✅ if negativeBilling false, ensure stock > 0
+      if (!allowNegative && (!inventory || inventory.stock <= 0)) {
+        return res.json({ stock: 0, price: null, modalNo: null });
+      }
+
       return res.json({
         stock: inventory?.stock || 0,
         price: inventory?.price ?? null,
@@ -206,18 +200,17 @@ const getStock = async (req, res, next) => {
       });
     }
 
-    // Aggregation mode - get available options
+    // Aggregation mode
     const inventoryRecords = await db.inventory.findMany({
       where: {
         productId: parsedProductId,
         companyId,
         branchId,
-        stock: { gt: 0 },
+        ...(allowNegative ? {} : { stock: { gt: 0 } }), // ✅ allow or restrict
       },
       distinct: ['frameTypeId', 'brandId'],
       include: {
         frameType: { select: { id: true, name: true } },
-        // shapeType: { select: { id: true, name: true } },
         brands: { select: { id: true, name: true } },
       },
     });
@@ -226,40 +219,24 @@ const getStock = async (req, res, next) => {
       throw new AppError('No inventory found for this product', 404);
     }
 
-    // Deduplicate using object properties
-    const deduplicate = (arr, key) => {
+    const deduplicate = (arr) => {
       const seen = new Set();
       return arr.filter((item) => {
-        const compositeKey = `${item.id}:${item.name}`;
-        if (seen.has(compositeKey)) {
-          return false;
-        }
-        seen.add(compositeKey);
+        const key = `${item.id}:${item.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
     };
 
-    // Extract and deduplicate each type
-    const frameTypes = deduplicate(
-      inventoryRecords.map((item) => item.frameType).filter(Boolean),
-      'frameType'
-    );
-
-    // const shapeTypes = deduplicate(
-    //   inventoryRecords.map((item) => item.shapeType).filter(Boolean),
-    //   'shapeType'
-    // );
-
-    const brands = deduplicate(
-      inventoryRecords.map((item) => item.brands).filter(Boolean),
-      'brands'
-    );
-
     res.json({
       productId: parsedProductId,
-      frameTypes,
-      // shapeTypes,
-      brands,
+      frameTypes: deduplicate(
+        inventoryRecords.map((i) => i.frameType).filter(Boolean)
+      ),
+      brands: deduplicate(
+        inventoryRecords.map((i) => i.brands).filter(Boolean)
+      ),
     });
   } catch (error) {
     console.error('Stock check failed:', error);

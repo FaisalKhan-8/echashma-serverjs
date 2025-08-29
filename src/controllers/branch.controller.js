@@ -413,6 +413,33 @@ const updateBranch = async (req, res, next) => {
   }
 };
 
+const updateNegativeBilling = async (req, res) => {
+  try {
+    const { branchId } = req.params;
+    const { negativeBilling } = req.body;
+
+    if (typeof negativeBilling !== 'boolean') {
+      return res
+        .status(400)
+        .json({ message: 'negativeBilling must be a boolean' });
+    }
+
+    const updatedBranch = await db.branch.update({
+      where: { id: Number(branchId) },
+      data: { negativeBilling },
+      include: { users: true }, // optional if you want users
+    });
+
+    return res.json({
+      message: 'Negative billing updated successfully',
+      branch: updatedBranch,
+    });
+  } catch (error) {
+    console.error('Update negativeBilling error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // Delete Branch function
 const deleteBranch = async (req, res, next) => {
   try {
@@ -446,5 +473,6 @@ module.exports = {
   getBranches,
   getBranchById,
   updateBranch,
+  updateNegativeBilling,
   deleteBranch,
 };

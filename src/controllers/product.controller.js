@@ -5,27 +5,23 @@ const { AppError } = require('../errors/AppError');
 
 // Create a new product
 const createProduct = async (req, res, next) => {
-  const { name, code } = req.body;
+  const { name, code, negativeAllowed } = req.body; // ✅ added negativeAllow
   const { companyId: userCompanyId, role } = req.user;
   const { companyId: selectedCompanyId } = req.query;
 
   try {
     let companyId;
 
-    // If the user is SUPER_ADMIN, they can pass the companyId via the query params
     if (role === 'SUPER_ADMIN') {
       if (selectedCompanyId) {
-        // If SUPER_ADMIN passes a companyId in the query params, use that
-        companyId = Number(selectedCompanyId); // Ensure companyId is a number
+        companyId = Number(selectedCompanyId);
       } else {
-        // If no companyId is provided by SUPER_ADMIN, return an error
         throw new AppError(
           'SUPER_ADMIN must provide a companyId when creating a product.',
           400
         );
       }
     } else {
-      // For non-SUPER_ADMIN users (like ADMIN), use the companyId from the token
       if (!userCompanyId) {
         throw new AppError(
           'No company associated with the user. Cannot create product.',
@@ -35,14 +31,12 @@ const createProduct = async (req, res, next) => {
       companyId = userCompanyId;
     }
 
-    // Step 1: Check if a product with the same name already exists for the given company
+    // Check for duplicates
     const existingProduct = await db.product.findFirst({
       where: {
         AND: [{ companyId }, { OR: [{ code }, { name }] }],
       },
     });
-
-    console.log(existingProduct, 'product already');
 
     if (existingProduct) {
       if (existingProduct.code === code) {
@@ -53,12 +47,11 @@ const createProduct = async (req, res, next) => {
       }
     }
 
-    // Step 3: Create the new product for the correct company
+    // ✅ include negativeAllow in create
     const newProduct = await db.product.create({
-      data: { name, code, companyId },
+      data: { name, code, negativeAllowed, companyId },
     });
 
-    // Step 4: Respond with the newly created product
     res.status(201).json(newProduct);
   } catch (error) {
     console.error(error);
@@ -156,14 +149,14 @@ const getProductById = async (req, res) => {
 // Update a product by ID, including associations with suppliers and branches
 const updateProduct = async (req, res, next) => {
   const { id } = req.params;
-  const { name, code } = req.body;
+  const { name, code, negativeAllowed } = req.body; // ✅ added negativeAllow
   const { companyId, role } = req.user;
 
   try {
     let companyIdToCheck;
     let currentProduct;
 
-    // Determine the company to check based on role
+    // SUPER_ADMIN: find product and use its companyId
     if (role === 'SUPER_ADMIN') {
       currentProduct = await db.product.findUnique({
         where: { id: Number(id) },
@@ -177,7 +170,7 @@ const updateProduct = async (req, res, next) => {
       companyIdToCheck = companyId;
     }
 
-    // Check for duplicates in the target company
+    // Check for duplicates (name or code)
     const existingProduct = await db.product.findFirst({
       where: {
         OR: [{ name }, { code }],
@@ -193,20 +186,17 @@ const updateProduct = async (req, res, next) => {
       );
     }
 
-    // Proceed with the update
+    // ✅ include negativeAllow in update
     let updatedProduct;
     if (role === 'SUPER_ADMIN') {
       updatedProduct = await db.product.update({
         where: { id: Number(id) },
-        data: { name, code },
+        data: { name, code, negativeAllowed },
       });
     } else {
       updatedProduct = await db.product.update({
-        where: {
-          id: Number(id),
-          companyId,
-        },
-        data: { name, code },
+        where: { id: Number(id), companyId },
+        data: { name, code, negativeAllowed },
       });
     }
 

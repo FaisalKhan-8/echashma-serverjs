@@ -41,6 +41,8 @@ model Company {
   updated_at      DateTime          @default(now()) @updatedAt
   uuid            String            @unique @default(uuid()) @db.UniqueIdentifier
   companyLogo     String?           @db.VarChar(255)
+  whatsappPhoneId String?           @db.VarChar(255)
+  whatsappToken   String?           @db.VarChar(500)
   branches        Branch[]          @relation("CompanyBranches")
   Brands          Brands[]          @relation("CompanyBrands")
   CoatingType     CoatingType[]     @relation("CompanyCoatingType")
@@ -66,6 +68,7 @@ model Branch {
   phone           String            @db.VarChar(20)
   email           String?           @db.VarChar(255)
   contactPerson   String            @db.VarChar(255)
+  negativeBilling Boolean?          @default(false)
   created_at      DateTime          @default(now())
   updated_at      DateTime          @updatedAt
   uuid            String            @unique @default(uuid()) @db.UniqueIdentifier
@@ -83,6 +86,7 @@ model Product {
   id                  Int                   @id @default(autoincrement())
   code                String                @db.VarChar(100)
   name                String                @db.VarChar(255)
+  negativeAllowed     Boolean?              @default(false)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   userId              Int?

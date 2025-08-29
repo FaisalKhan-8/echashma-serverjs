@@ -2,8 +2,8 @@ BEGIN TRY
 
 BEGIN TRAN;
 
--- DropIndex
-ALTER TABLE [dbo].[Company] DROP CONSTRAINT [Company_gst_key];
+-- AlterTable
+ALTER TABLE [dbo].[Product] ADD [negativeAllowed] BIT CONSTRAINT [Product_negativeAllowed_df] DEFAULT 0;
 
 COMMIT TRAN;
 

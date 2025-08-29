@@ -37,10 +37,11 @@ CREATE TABLE [dbo].[Company] (
     [updated_at] DATETIME2 NOT NULL CONSTRAINT [Company_updated_at_df] DEFAULT CURRENT_TIMESTAMP,
     [uuid] UNIQUEIDENTIFIER NOT NULL,
     [companyLogo] VARCHAR(255),
+    [whatsappPhoneId] VARCHAR(255),
+    [whatsappToken] VARCHAR(500),
     CONSTRAINT [Company_pkey] PRIMARY KEY CLUSTERED ([id]),
     CONSTRAINT [Company_companyName_key] UNIQUE NONCLUSTERED ([companyName]),
     CONSTRAINT [Company_email_key] UNIQUE NONCLUSTERED ([email]),
-    CONSTRAINT [Company_gst_key] UNIQUE NONCLUSTERED ([gst]),
     CONSTRAINT [Company_uuid_key] UNIQUE NONCLUSTERED ([uuid])
 );
 
@@ -52,6 +53,7 @@ CREATE TABLE [dbo].[Branch] (
     [phone] VARCHAR(20) NOT NULL,
     [email] VARCHAR(255),
     [contactPerson] VARCHAR(255) NOT NULL,
+    [negativeBilling] BIT CONSTRAINT [Branch_negativeBilling_df] DEFAULT 0,
     [created_at] DATETIME2 NOT NULL CONSTRAINT [Branch_created_at_df] DEFAULT CURRENT_TIMESTAMP,
     [updated_at] DATETIME2 NOT NULL,
     [uuid] UNIQUEIDENTIFIER NOT NULL,
@@ -175,7 +177,6 @@ CREATE TABLE [dbo].[PurchaseItem] (
     [sgst] DECIMAL(10,2),
     [discount] DECIMAL(10,2) CONSTRAINT [PurchaseItem_discount_df] DEFAULT 0,
     [frameTypeId] INT,
-    [shapeTypeId] INT,
     [modalNo] VARCHAR(100),
     [brandId] INT,
     [netAmount] DECIMAL(10,2),
@@ -218,7 +219,7 @@ CREATE TABLE [dbo].[CustomerInvoiceItem] (
     [discount] DECIMAL(10,2) CONSTRAINT [CustomerInvoiceItem_discount_df] DEFAULT 0,
     [modalNo] VARCHAR(100),
     [frameTypeId] INT NOT NULL,
-    [shapeTypeId] INT NOT NULL,
+    [visionTypeId] INT,
     [brandId] INT NOT NULL,
     [createdAt] DATETIME2 NOT NULL CONSTRAINT [CustomerInvoiceItem_createdAt_df] DEFAULT CURRENT_TIMESTAMP,
     [updatedAt] DATETIME2 NOT NULL,
@@ -234,7 +235,6 @@ CREATE TABLE [dbo].[Inventory] (
     [id] INT NOT NULL IDENTITY(1,1),
     [productId] INT NOT NULL,
     [modalNo] VARCHAR(100),
-    [shapeTypeId] INT,
     [frameTypeId] INT,
     [stock] INT NOT NULL CONSTRAINT [Inventory_stock_df] DEFAULT 0,
     [createdAt] DATETIME2 NOT NULL CONSTRAINT [Inventory_createdAt_df] DEFAULT CURRENT_TIMESTAMP,
@@ -370,9 +370,6 @@ ALTER TABLE [dbo].[PurchaseItem] ADD CONSTRAINT [PurchaseItem_productId_fkey] FO
 ALTER TABLE [dbo].[PurchaseItem] ADD CONSTRAINT [PurchaseItem_purchaseId_fkey] FOREIGN KEY ([purchaseId]) REFERENCES [dbo].[Purchase]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE [dbo].[PurchaseItem] ADD CONSTRAINT [PurchaseItem_shapeTypeId_fkey] FOREIGN KEY ([shapeTypeId]) REFERENCES [dbo].[ShapeType]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
-
--- AddForeignKey
 ALTER TABLE [dbo].[CustomerInvoice] ADD CONSTRAINT [CustomerInvoice_branchId_fkey] FOREIGN KEY ([branchId]) REFERENCES [dbo].[Branch]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
@@ -391,7 +388,7 @@ ALTER TABLE [dbo].[CustomerInvoiceItem] ADD CONSTRAINT [CustomerInvoiceItem_invo
 ALTER TABLE [dbo].[CustomerInvoiceItem] ADD CONSTRAINT [CustomerInvoiceItem_productId_fkey] FOREIGN KEY ([productId]) REFERENCES [dbo].[Product]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE [dbo].[CustomerInvoiceItem] ADD CONSTRAINT [CustomerInvoiceItem_shapeTypeId_fkey] FOREIGN KEY ([shapeTypeId]) REFERENCES [dbo].[ShapeType]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE [dbo].[CustomerInvoiceItem] ADD CONSTRAINT [CustomerInvoiceItem_visionTypeId_fkey] FOREIGN KEY ([visionTypeId]) REFERENCES [dbo].[VisionType]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE [dbo].[Inventory] ADD CONSTRAINT [Inventory_branchId_fkey] FOREIGN KEY ([branchId]) REFERENCES [dbo].[Branch]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
@@ -407,9 +404,6 @@ ALTER TABLE [dbo].[Inventory] ADD CONSTRAINT [Inventory_frameTypeId_fkey] FOREIG
 
 -- AddForeignKey
 ALTER TABLE [dbo].[Inventory] ADD CONSTRAINT [Inventory_productId_fkey] FOREIGN KEY ([productId]) REFERENCES [dbo].[Product]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
-
--- AddForeignKey
-ALTER TABLE [dbo].[Inventory] ADD CONSTRAINT [Inventory_shapeTypeId_fkey] FOREIGN KEY ([shapeTypeId]) REFERENCES [dbo].[ShapeType]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE [dbo].[ExpenseCategory] ADD CONSTRAINT [ExpenseCategory_Company_fkey] FOREIGN KEY ([companyId]) REFERENCES [dbo].[Company]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;

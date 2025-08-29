@@ -8,7 +8,11 @@ const {
   UpdateCompanySchema,
 } = require('../schema/companies.js');
 const { AppError } = require('../errors/AppError.js');
+const cache = require('../utils/cache');
 
+function cacheKey(companyId) {
+  return `company:${companyId}:whatsapp`;
+}
 // Ensure the uploads directory exists
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -455,6 +459,75 @@ const deleteCompany = async (req, res, next) => {
   }
 };
 
+async function getCompanyWhatsAppConfig(companyId) {
+  // 1) Check cache
+  let conf = cache.get(cacheKey(companyId));
+  if (conf) {
+    console.log('WhatsApp Config (from cache):', conf);
+    return conf;
+  }
+
+  // 2) Query DB
+  const company = await db.company.findUnique({
+    where: { id: Number(companyId) },
+    select: {
+      whatsappPhoneId: true,
+      whatsappToken: true,
+      companyName: true,
+    },
+  });
+
+  if (!company) {
+    throw new AppError('Company not found', 404);
+  }
+
+  // ✅ Check if credentials exist
+  if (!company.whatsappPhoneId || !company.whatsappToken) {
+    console.error('WhatsApp Config missing in DB for company:', {
+      id: companyId,
+      whatsappPhoneId: company.whatsappPhoneId,
+      whatsappToken: company.whatsappToken,
+    });
+    throw new AppError(
+      'WhatsApp credentials not configured for this company',
+      400
+    );
+  }
+
+  // 3) Normalize config
+  conf = {
+    whatsappPhoneId: company.whatsappPhoneId,
+    whatsappToken: company.whatsappToken,
+    companyName: company.companyName,
+  };
+
+  // 4) Save in cache
+  cache.set(cacheKey(companyId), conf);
+
+  console.log('WhatsApp Config (from DB):', conf);
+  return conf;
+}
+
+async function setCompanyWhatsAppConfig(
+  companyId,
+  whatsappPhoneId,
+  whatsappToken
+) {
+  const updated = await db.company.update({
+    where: { id: Number(companyId) },
+    data: { whatsappPhoneId, whatsappToken },
+    select: { whatsappPhoneId: true, whatsappToken: true, companyName: true },
+  });
+
+  const conf = {
+    phoneId: updated.whatsappPhoneId,
+    token: updated.whatsappToken,
+    companyName: updated.companyName,
+  };
+  cache.set(cacheKey(companyId), conf);
+  return conf;
+}
+
 module.exports = {
   createCompany,
   upload,
@@ -463,4 +536,6 @@ module.exports = {
   getCompanyById,
   updateCompany,
   deleteCompany,
+  getCompanyWhatsAppConfig,
+  setCompanyWhatsAppConfig,
 };

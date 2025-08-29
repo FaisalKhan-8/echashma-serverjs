@@ -6,6 +6,7 @@ const {
   updateBranch,
   deleteBranch,
   getBranchById,
+  updateNegativeBilling,
 } = require('../controllers/branch.controller');
 const authorizeAdmin = require('../middleware/authorizeAdmin');
 const authenticateUser = require('../middleware/authenticateUser');
@@ -16,6 +17,11 @@ branchRoutes.post('/createBranch', authenticateUser, createBranch);
 branchRoutes.get('/getBranch', authenticateUser, getBranches);
 branchRoutes.get('/getBranch/:branchId', authenticateUser, getBranchById);
 branchRoutes.put('/update/:id', authenticateUser, updateBranch);
+branchRoutes.patch(
+  '/:branchId/negative-billing',
+  authenticateUser,
+  updateNegativeBilling
+);
 branchRoutes.delete('/deleteBranch/:id', authenticateUser, deleteBranch);
 
 module.exports = branchRoutes;

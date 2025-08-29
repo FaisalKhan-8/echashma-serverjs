@@ -8,6 +8,7 @@ const {
   deleteCompany,
   getCompanyById,
   updateDocument,
+  setCompanyWhatsAppConfig,
 } = require('../controllers/companies.controller');
 const authenticateUser = require('../middleware/authenticateUser');
 
@@ -38,5 +39,24 @@ companyRoutes.patch(
   updateDocument
 );
 companyRoutes.delete('/deleteCompany/:id', authorizeAdmin, deleteCompany);
+companyRoutes.post('/whatsapp', authorizeAdmin, async (req, res, next) => {
+  try {
+    const { companyId, whatsappPhoneId, whatsappToken } = req.body;
+
+    if (!whatsappPhoneId || !whatsappToken || !companyId)
+      return res.status(400).json({
+        error: 'companyId and whatsappPhoneId, whatsappToken are required',
+      });
+
+    const conf = await setCompanyWhatsAppConfig(
+      companyId,
+      whatsappPhoneId,
+      whatsappToken
+    );
+    res.json({ message: 'WhatsApp credentials updated', data: conf });
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = companyRoutes;
