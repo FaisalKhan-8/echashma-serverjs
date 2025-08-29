@@ -50,8 +50,15 @@ app.get('/uploads/:fileName', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
+// app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
+//   console.log(
+//     `Server is running on port: http://0.0.0.0:${process.env.PORT || 3000}`
+//   );
+// });
+
+// testing
+app.listen(process.env.PORT || 3001, '0.0.0.0', () => {
   console.log(
-    `Server is running on port: http://0.0.0.0:${process.env.PORT || 3000}`
+    `Server is running on port: http://0.0.0.0:${process.env.PORT || 3001}`
   );
 });
