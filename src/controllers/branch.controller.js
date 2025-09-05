@@ -116,14 +116,174 @@ const createBranch = async (req, res, next) => {
   }
 };
 
+// const getBranches = async (req, res, next) => {
+//   try {
+//     const { userId, role, companyId } = req.user;
+//     const {
+//       page = 1,
+//       limit = 10,
+//       searchTerm = '',
+//       companyId: queryCompanyId,
+//       branchId: queryBranchId, // ✅ branchId from query
+//     } = req.query;
+
+//     const pageNum = parseInt(page, 10);
+//     const limitNum = parseInt(limit, 10);
+//     const offset = (pageNum - 1) * limitNum;
+
+//     let branches = [];
+//     let totalBranches = 0;
+
+//     const searchConditions = searchTerm
+//       ? {
+//           branchName: {
+//             contains: searchTerm,
+//           },
+//         }
+//       : {};
+
+//     // ✅ Convert query params
+//     const parsedCompanyId = queryCompanyId
+//       ? parseInt(queryCompanyId, 10)
+//       : undefined;
+//     const parsedBranchId = queryBranchId
+//       ? parseInt(queryBranchId, 10)
+//       : undefined;
+
+//     switch (role) {
+//       case 'SUPER_ADMIN': {
+//         const whereCondition = {
+//           ...(parsedCompanyId && { companyId: parsedCompanyId }),
+//           ...(parsedBranchId && { id: parsedBranchId }), // ✅ filter by branchId
+//           ...searchConditions,
+//         };
+
+//         branches = await db.branch.findMany({
+//           where: whereCondition,
+//           skip: parsedBranchId ? undefined : offset, // ✅ if branchId is given, skip pagination
+//           take: parsedBranchId ? undefined : limitNum,
+//           include: {
+//             company: true,
+//             users: true,
+//           },
+//         });
+
+//         totalBranches = await db.branch.count({
+//           where: whereCondition,
+//         });
+//         break;
+//       }
+
+//       case 'ADMIN': {
+//         if (!companyId) {
+//           return res
+//             .status(400)
+//             .json({ error: 'Company ID is required for ADMIN role.' });
+//         }
+
+//         const whereCondition = {
+//           companyId,
+//           ...(parsedBranchId && { id: parsedBranchId }), // ✅ filter by branchId
+//           ...searchConditions,
+//         };
+
+//         branches = await db.branch.findMany({
+//           where: whereCondition,
+//           skip: parsedBranchId ? undefined : offset,
+//           take: parsedBranchId ? undefined : limitNum,
+//           include: {
+//             company: true,
+//             users: true,
+//           },
+//         });
+
+//         totalBranches = await db.branch.count({ where: whereCondition });
+//         break;
+//       }
+
+//       case 'SUBADMIN': {
+//         if (!companyId) {
+//           return res
+//             .status(400)
+//             .json({ error: 'Company ID is required for SUBADMIN role.' });
+//         }
+
+//         const whereCondition = {
+//           companyId,
+//           ...(parsedBranchId && { id: parsedBranchId }), // ✅ filter by branchId
+//           ...searchConditions,
+//         };
+
+//         branches = await db.branch.findMany({
+//           where: whereCondition,
+//           skip: parsedBranchId ? undefined : offset,
+//           take: parsedBranchId ? undefined : limitNum,
+//           include: {
+//             company: true,
+//             users: true,
+//           },
+//         });
+
+//         totalBranches = await db.branch.count({ where: whereCondition });
+//         break;
+//       }
+
+//       case 'MANAGER': {
+//         if (!companyId) {
+//           return res
+//             .status(400)
+//             .json({ error: 'Company ID is required for MANAGER role.' });
+//         }
+
+//         const whereCondition = {
+//           companyId,
+//           managers: { some: { id: userId } },
+//           ...(parsedBranchId && { id: parsedBranchId }), // ✅ filter by branchId
+//           ...searchConditions,
+//         };
+
+//         branches = await db.branch.findMany({
+//           where: whereCondition,
+//           skip: parsedBranchId ? undefined : offset,
+//           take: parsedBranchId ? undefined : limitNum,
+//           include: {
+//             company: true,
+//             users: true,
+//           },
+//         });
+
+//         totalBranches = await db.branch.count({ where: whereCondition });
+//         break;
+//       }
+
+//       default:
+//         return res
+//           .status(403)
+//           .json({ error: 'Unauthorized role for accessing branches.' });
+//     }
+
+//     return res.status(200).json({
+//       message: `${role} branches retrieved successfully!`,
+//       branches,
+//       total: totalBranches,
+//       page: parsedBranchId ? 1 : pageNum, // ✅ If fetching by branchId, page=1
+//       limit: parsedBranchId ? totalBranches : limitNum,
+//     });
+//   } catch (error) {
+//     console.error('Error in getBranches:', error);
+//     next(error);
+//   }
+// };
+
 const getBranches = async (req, res, next) => {
   try {
-    const { userId, role, companyId } = req.user; // Destructuring user data from req.user
+    const { userId, role, companyId, branchId } = req.user; // Destructuring user data from req.user
     const {
       page = 1,
       limit = 10,
       searchTerm = '',
       companyId: queryCompanyId,
+      branchId: queryBranchId,
     } = req.query; // Destructuring query params and checking for companyId in query
 
     console.log(req.user);

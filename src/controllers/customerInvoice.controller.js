@@ -249,8 +249,9 @@ const createCustomerInvoice = async (req, res, next) => {
     const allowNegative = branch?.negativeBilling ?? false;
 
     // Generate unique invoice number
-    const generateInvoiceNo = async () => {
+    const generateInvoiceNo = async (branchId) => {
       const lastInvoice = await db.customerInvoice.findFirst({
+        where: { branchId },
         orderBy: { createdAt: 'desc' },
         select: { orderNo: true },
       });
@@ -260,7 +261,7 @@ const createCustomerInvoice = async (req, res, next) => {
         : 0;
       return `EC${lastNumber + 1}`;
     };
-    const invoiceNo = await generateInvoiceNo();
+    const invoiceNo = await generateInvoiceNo(branchId);
 
     // Calculate items (same as before)
     const processFinancials = () => {

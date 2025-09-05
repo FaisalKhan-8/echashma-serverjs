@@ -1,0 +1,22 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+-- DropIndex
+ALTER TABLE [dbo].[CustomerInvoice] DROP CONSTRAINT [CustomerInvoice_orderNo_key];
+
+-- AlterTable
+ALTER TABLE [dbo].[CustomerInvoice] ALTER COLUMN [orderNo] NVARCHAR(1000) NOT NULL;
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH
