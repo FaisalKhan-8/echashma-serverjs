@@ -443,6 +443,13 @@ const updateCustomerInvoice = async (req, res, next) => {
       throw new AppError('Unauthorized role', 403);
     }
 
+    // ✅ Check branch negativeBilling flag (NEW)
+    const branch = await db.branch.findUnique({
+      where: { id: branchId },
+      select: { negativeBilling: true },
+    });
+    const allowNegative = branch?.negativeBilling ?? false;
+
     // Get existing invoice
     const existingInvoice = await db.customerInvoice.findUnique({
       where: { id: invoiceId },
@@ -468,6 +475,9 @@ const updateCustomerInvoice = async (req, res, next) => {
         });
 
         if (!inventory) {
+          // If inventory doesn't exist and negative billing is allowed, skip revert
+          if (allowNegative) continue;
+
           throw new AppError(
             `Inventory not found for product ${item.productId} (revert)`,
             400
@@ -562,39 +572,50 @@ const updateCustomerInvoice = async (req, res, next) => {
       const orderDateObj = new Date(orderDate);
       if (isNaN(orderDateObj)) throw new AppError('Invalid order date', 400);
 
-      // Update inventory with new quantities
+      // ✅ Update inventory with new quantities (UPDATED for negative billing)
       for (const product of products) {
-        const inventory = await prisma.inventory.findFirst({
-          where: {
-            productId: product.productId,
-            brandId: product.brandId,
-            frameTypeId: product.frameTypeId,
-            companyId,
-            branchId,
-          },
-        });
+        const where = {
+          productId: product.productId,
+          brandId: product.brandId,
+          frameTypeId: product.frameTypeId,
+          companyId,
+          branchId,
+        };
+
+        let inventory = await prisma.inventory.findFirst({ where });
 
         if (!inventory) {
-          throw new AppError(
-            `Inventory not found for product ${product.productId}`,
-            400
-          );
+          if (!allowNegative) {
+            throw new AppError(
+              `Inventory not found for product ${product.name}`,
+              400
+            );
+          }
+          // ✅ create negative inventory
+          inventory = await prisma.inventory.create({
+            data: {
+              ...where,
+              stock: -product.quantity,
+              price: product.price,
+              ...(product.modalNo && { modalNo: product.modalNo }),
+            },
+          });
+        } else {
+          // ✅ update inventory (allow negative if flag is true)
+          if (!allowNegative && inventory.stock < product.quantity) {
+            throw new AppError(
+              `Insufficient stock for product ${product.name} (${inventory.stock} available)`,
+              400
+            );
+          }
+          await prisma.inventory.update({
+            where: { id: inventory.id },
+            data: { stock: inventory.stock - product.quantity },
+          });
         }
-
-        if (inventory.stock < product.quantity) {
-          throw new AppError(
-            `Insufficient stock for product ${product.productId} (${inventory.stock} available)`,
-            400
-          );
-        }
-
-        await prisma.inventory.update({
-          where: { id: inventory.id },
-          data: { stock: inventory.stock - product.quantity },
-        });
       }
 
-      // CORRECTED: Use proper model name from your schema
+      // Delete old items
       await prisma.customerInvoiceItem.deleteMany({
         where: { invoiceId: existingInvoice.id },
       });
