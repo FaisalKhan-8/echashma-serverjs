@@ -77,7 +77,10 @@ const createCompany = async (req, res, next) => {
     });
 
     if (existingCompany) {
-      throw new AppError('Company already exists!', 400);
+      throw new AppError(
+        `Company with name "${companyName}" already exists! Please choose a different company name.`,
+        400
+      );
     }
 
     // Get file paths for PAN card and Aadhaar card images
@@ -98,7 +101,7 @@ const createCompany = async (req, res, next) => {
       });
       if (existingGst) {
         throw new AppError(
-          'GST number already in use by another company!',
+          `GST number "${gst}" is already in use by another company! Please use a different GST number.`,
           400
         );
       }
@@ -110,7 +113,23 @@ const createCompany = async (req, res, next) => {
         where: { email },
       });
       if (existingEmail) {
-        throw new AppError('Email already in use by another company!', 400);
+        throw new AppError(
+          `Email "${email}" is already in use by another company! Please use a different email address.`,
+          400
+        );
+      }
+    }
+
+    // Check if the phone is already in use
+    if (phone) {
+      const existingPhone = await db.company.findUnique({
+        where: { phone },
+      });
+      if (existingPhone) {
+        throw new AppError(
+          `Phone number "${phone}" is already in use by another company! Please use a different phone number.`,
+          400
+        );
       }
     }
 
@@ -126,7 +145,12 @@ const createCompany = async (req, res, next) => {
       // Validate that no SUBADMIN is already assigned to a company
       for (let subadmin of subadmins) {
         if (subadmin.companyId) {
-          throw new AppError('SUBADMIN is already assigned to a company!', 400);
+          throw new AppError(
+            `SUBADMIN user "${
+              subadmin.name || subadmin.email
+            }" is already assigned to a company! Please select a different user or remove them from their current company first.`,
+            400
+          );
         }
       }
     }
@@ -156,12 +180,65 @@ const createCompany = async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      // Format validation errors to be more user-friendly
+      const formattedErrors = error.errors.map((err) => ({
+        field: err.path.join('.'),
+        message: err.message,
+        value: err.input,
+      }));
+
       return res.status(400).json({
         status: 'error',
-        message: 'Validation failed',
-        errors: error.errors,
+        message: 'Validation failed. Please check the following fields:',
+        errors: formattedErrors,
       });
     }
+
+    // Handle database constraint violations
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.[0] || 'field';
+      const fieldValue =
+        error.meta?.target?.length > 1 ? error.meta.target[1] : '';
+
+      console.error('Database constraint violation:', {
+        code: error.code,
+        field: field,
+        target: error.meta?.target,
+        message: error.message,
+      });
+
+      // Provide specific error messages based on the field
+      let errorMessage = '';
+      switch (field) {
+        case 'companyName':
+          errorMessage = `Company name "${fieldValue}" already exists! Please choose a different company name.`;
+          break;
+        case 'email':
+          errorMessage = `Email "${fieldValue}" is already in use! Please use a different email address.`;
+          break;
+        case 'phone':
+          errorMessage = `Phone number "${fieldValue}" is already in use! Please use a different phone number.`;
+          break;
+        case 'gst':
+          errorMessage = `GST number "${fieldValue}" is already in use! Please use a different GST number.`;
+          break;
+        default:
+          errorMessage = `${field} already exists. Please use a different ${field}.`;
+      }
+
+      return res.status(400).json({
+        status: 'error',
+        message: errorMessage,
+      });
+    }
+
+    // Log unexpected errors for debugging
+    console.error('Unexpected error in createCompany:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      meta: error.meta,
+    });
 
     next(error);
   }
@@ -327,7 +404,49 @@ const updateCompany = async (req, res, next) => {
 
       if (companyNameExists) {
         throw new AppError(
-          'Company name already in use by another company!',
+          `Company name "${companyName}" is already in use by another company! Please choose a different company name.`,
+          400
+        );
+      }
+    }
+
+    // Check if the new email is already taken by another company
+    if (email && email !== existingCompany.email) {
+      const emailExists = await db.company.findUnique({
+        where: { email },
+      });
+
+      if (emailExists) {
+        throw new AppError(
+          `Email "${email}" is already in use by another company! Please use a different email address.`,
+          400
+        );
+      }
+    }
+
+    // Check if the new phone is already taken by another company
+    if (phone && phone !== existingCompany.phone) {
+      const phoneExists = await db.company.findUnique({
+        where: { phone },
+      });
+
+      if (phoneExists) {
+        throw new AppError(
+          `Phone number "${phone}" is already in use by another company! Please use a different phone number.`,
+          400
+        );
+      }
+    }
+
+    // Check if the new GST is already taken by another company
+    if (gst && gst !== existingCompany.gst) {
+      const gstExists = await db.company.findUnique({
+        where: { gst },
+      });
+
+      if (gstExists) {
+        throw new AppError(
+          `GST number "${gst}" is already in use by another company! Please use a different GST number.`,
           400
         );
       }
@@ -363,6 +482,21 @@ const updateCompany = async (req, res, next) => {
         status: 'error',
         message: 'Validation failed',
         errors: error.errors,
+      });
+    }
+
+    // Handle database constraint violations
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.[0] || 'field';
+      console.error('Database constraint violation in updateCompany:', {
+        code: error.code,
+        field: field,
+        target: error.meta?.target,
+        message: error.message,
+      });
+      return res.status(400).json({
+        status: 'error',
+        message: `${field} already exists. Please use a different ${field}.`,
       });
     }
 
