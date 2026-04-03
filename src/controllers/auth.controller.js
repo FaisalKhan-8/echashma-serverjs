@@ -1,19 +1,19 @@
-const db = require('../utils/db.config.js');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { LoginUserSchema, UpdateUserSchema } = require('../schema/user.js');
-const { AppError } = require('../errors/AppError.js');
-const { z } = require('zod');
-const upload = require('../middleware/upload.js');
-const crypto = require('crypto');
-const sendEmail = require('../utils/sendEmail.js');
+const db = require('../utils/db.config.js')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
+const { LoginUserSchema, UpdateUserSchema } = require('../schema/user.js')
+const { AppError } = require('../errors/AppError.js')
+const { z } = require('zod')
+const upload = require('../middleware/upload.js')
+const crypto = require('crypto')
+const sendEmail = require('../utils/sendEmail.js')
 
-const { hashSync, compare } = bcrypt;
+const { hashSync, compare } = bcrypt
 
 //TODO: user and company only take one email also for name
 const CreateUser = async (req, res, next) => {
   try {
-    console.log('Request body:', req.body); // In production, consider using a logger
+    console.log('Request body:', req.body) // In production, consider using a logger
 
     const {
       email,
@@ -23,40 +23,40 @@ const CreateUser = async (req, res, next) => {
       contactPerson,
       address,
       gst,
-      role,
-    } = req.body;
+      role
+    } = req.body
 
-    const userRole = req.user.role; // Role of the logged-in user
-    const userCompanyId = req.user.companyId; // For SUBADMIN, their assigned company ID
+    const userRole = req.user.role // Role of the logged-in user
+    const userCompanyId = req.user.companyId // For SUBADMIN, their assigned company ID
 
-    console.log(role, 'roleee');
-    console.log(userCompanyId, 'userCompanyId');
+    console.log(role, 'roleee')
+    console.log(userCompanyId, 'userCompanyId')
 
     // Validate required fields manually
     if (!password) {
-      throw new AppError('Missing required fields: password is mandatory', 400);
+      throw new AppError('Missing required fields: password is mandatory', 400)
     }
 
     // Extract file paths for pancard and aadhaarcard
-    let pancardPath = null;
-    let aadhaarcardPath = null;
-    let companyLogoPath = null;
+    let pancardPath = null
+    let aadhaarcardPath = null
+    let companyLogoPath = null
 
     if (req.files) {
-      pancardPath = req.files?.pancard ? req.files.pancard[0].path : null;
+      pancardPath = req.files?.pancard ? req.files.pancard[0].path : null
       aadhaarcardPath = req.files?.adharcard
         ? req.files.adharcard[0].path
-        : null;
+        : null
       companyLogoPath = req.files?.companyLogo
         ? req.files.companyLogo[0].filename
-        : null; // Get only the filename
+        : null // Get only the filename
     }
 
-    console.log('companyLogoPath ==>', companyLogoPath);
+    console.log('companyLogoPath ==>', companyLogoPath)
 
-    let companyId = null;
-    let finalEmail = email; // Default to the user-provided email
-    let finalName = contactPerson || req.body.name;
+    let companyId = null
+    let finalEmail = email // Default to the user-provided email
+    let finalName = contactPerson || req.body.name
 
     // Start a transaction
     const result = await db.$transaction(async (prisma) => {
@@ -67,51 +67,51 @@ const CreateUser = async (req, res, next) => {
           throw new AppError(
             'Company name is required to create a company!',
             400
-          );
+          )
         }
 
         // Ensure that the company doesn't already exist
         const existingCompany = await prisma.company.findUnique({
-          where: { companyName },
-        });
+          where: { companyName }
+        })
 
         if (existingCompany) {
           return next(
             new AppError('Company already exists with the same name.', 400)
-          );
+          )
         }
 
         if (!phone) {
           return next(
             new AppError('Missing required fields: phone is mandatory', 400)
-          );
+          )
         }
 
         // Validate phone format (example: basic phone validation for 10-digit numbers)
-        const phoneRegex = /^[0-9]{10}$/;
+        const phoneRegex = /^[0-9]{10}$/
         if (!phoneRegex.test(phone)) {
           return next(
             new AppError(
               'Invalid phone number format. It should be 10 digits.',
               400
             )
-          );
+          )
         }
 
         const existingUser = await prisma.user.findUnique({
-          where: { email: finalEmail },
-        });
+          where: { email: finalEmail }
+        })
 
         if (existingUser) {
-          throw new AppError('User already exists with this email', 400);
+          throw new AppError('User already exists with this email', 400)
         }
 
         const existingCompanyEmail = await prisma.company.findUnique({
-          where: { email: finalEmail },
-        });
+          where: { email: finalEmail }
+        })
 
         if (existingCompanyEmail) {
-          throw new AppError('Company already exists with this email!', 400);
+          throw new AppError('Company already exists with this email!', 400)
         }
 
         // Create the company
@@ -125,31 +125,31 @@ const CreateUser = async (req, res, next) => {
             gst: gst || null,
             companyLogo: companyLogoPath,
             pancard: pancardPath,
-            aadhaarcard: aadhaarcardPath,
-          },
-        });
+            aadhaarcard: aadhaarcardPath
+          }
+        })
 
-        console.log('Company created:', newCompany);
+        console.log('Company created:', newCompany)
 
         // Set the companyId to be assigned to the user later
-        companyId = newCompany.id;
+        companyId = newCompany.id
       } else if (userRole === 'ADMIN') {
         // Ensure ADMIN can only create SUBADMIN or MANAGER users
         if (!userCompanyId) {
           throw new AppError(
             'Unauthorized: ADMIN must be assigned to a company',
             403
-          );
+          )
         }
 
-        companyId = userCompanyId;
+        companyId = userCompanyId
 
         // Only allow ADMIN to create SUBADMIN or MANAGER
         if (role && role !== 'SUBADMIN' && role !== 'MANAGER') {
           throw new AppError(
             'Unauthorized: ADMIN can only create SUBADMIN or MANAGER users',
             403
-          );
+          )
         }
       } else if (userRole === 'SUBADMIN') {
         // Ensure SUBADMIN can only create MANAGER or SUBADMIN users, but not ADMIN
@@ -157,17 +157,17 @@ const CreateUser = async (req, res, next) => {
           throw new AppError(
             'Unauthorized: SUBADMIN must be assigned to a company',
             403
-          );
+          )
         }
 
-        companyId = userCompanyId;
+        companyId = userCompanyId
 
         // Ensure SUBADMIN can create only SUBADMIN or MANAGER, but NOT ADMIN
         if (role && role === 'ADMIN') {
           throw new AppError(
             'Unauthorized: SUBADMIN cannot create ADMIN users',
             403
-          );
+          )
         }
 
         // Ensure SUBADMIN can create only SUBADMIN or MANAGER users
@@ -175,23 +175,23 @@ const CreateUser = async (req, res, next) => {
           throw new AppError(
             'Unauthorized: SUBADMIN can only create SUBADMIN or MANAGER users',
             403
-          );
+          )
         }
       }
 
       // Now create the user after company creation
       const existingUser = await prisma.user.findUnique({
-        where: { email: finalEmail },
-      });
+        where: { email: finalEmail }
+      })
 
       if (existingUser) {
-        return next(new AppError('User already exists with this email', 400));
+        return next(new AppError('User already exists with this email', 400))
       }
 
       // Hash the password
-      const hashedPassword = hashSync(password, 10);
+      const hashedPassword = hashSync(password, 10)
 
-      console.log(hashedPassword, 'hashedPassword');
+      console.log(hashedPassword, 'hashedPassword')
 
       // Create the user
       const newUser = await prisma.user.create({
@@ -201,84 +201,84 @@ const CreateUser = async (req, res, next) => {
           password_visible: password,
           name: finalName || req.body.contactPerson || req.body.name, // Use final name (contact person or default)
           role: role || 'MANAGER',
-          companyId: companyId, // Assign company ID to the user
-        },
-      });
+          companyId: companyId // Assign company ID to the user
+        }
+      })
 
-      console.log('New User created:', newUser);
+      console.log('New User created:', newUser)
 
-      return { user: newUser, companyId };
-    });
+      return { user: newUser, companyId }
+    })
 
     // If everything is successful, send the response
     res.status(201).json({
       message: 'User created successfully!',
       user: result.user,
-      companyId: result.companyId,
-    });
+      companyId: result.companyId
+    })
   } catch (error) {
-    console.log('Error ----> ', error);
+    console.log('Error ----> ', error)
 
     // Handle specific errors
     if (error instanceof AppError) {
-      return res.status(error.statusCode).json({ error: error.message });
+      return res.status(error.statusCode).json({ error: error.message })
     }
 
-    next(error); // Pass any other errors to the error-handling middleware
+    next(error) // Pass any other errors to the error-handling middleware
   }
-};
+}
 
 const Login = async (req, res, next) => {
   try {
     // Validate request body using Zod schema
-    LoginUserSchema.parse(req.body);
-    const { email, password } = req.body;
+    LoginUserSchema.parse(req.body)
+    const { email, password } = req.body
 
-    console.log(req.body, 'user credentials');
+    console.log(req.body, 'user credentials')
 
-    // Fetch user from the database without company details first
-    let user = await db.user.findFirst({
+    const user = await db.user.findFirst({
       where: { email },
-      include: {},
-    });
+      include: {
+        company: true,
+        branches: true
+      }
+    })
 
-    console.log(user, 'user details found');
+    console.log(user, 'user details found')
 
     if (!user) {
-      return next(new AppError('User does not exist!', 404));
-    }
-
-    // If user is not Admin, include company details
-    if (user.role !== 'SUPER_ADMIN') {
-      user = await db.user.findFirst({
-        where: { email },
-        include: {
-          company: true,
-          branches: true,
-        },
-      });
-
-      console.log(user, ' <===');
+      return next(new AppError('User does not exist!', 404))
     }
 
     // Check if password is valid
-    const isPasswordValid = await compare(password, user.password);
+    const isPasswordValid = await compare(password, user.password)
 
-    console.log(isPasswordValid, 'password valid');
+    console.log(isPasswordValid, 'password valid')
 
     if (!isPasswordValid) {
-      return next(new AppError('Invalid credentials!', 401));
+      return next(new AppError('Invalid credentials!', 401))
     }
 
-    console.log(isPasswordValid, 'isPasswordValid');
+    console.log(isPasswordValid, 'isPasswordValid')
 
     // Extract the branchId from the first branch in the branches array (if available)
     const branchId =
       Array.isArray(user.branches) && user.branches.length > 0
         ? user.branches[0]?.id
-        : null;
+        : null
 
-    console.log(branchId, 'is Branch');
+    console.log(branchId, 'is Branch')
+
+    const membership =
+      user.company != null
+        ? {
+            membership: user.company.membership,
+            membershipStartDate: user.company.membershipStartDate,
+            membershipEndDate: user.company.membershipEndDate
+          }
+        : null
+
+    const kyc = user.company?.kyc ?? null
 
     // Create JWT token
     const token = jwt.sign(
@@ -287,9 +287,11 @@ const Login = async (req, res, next) => {
         role: user.role,
         companyId: user.companyId,
         branchId: branchId, // Send branchId as part of the token
+        membership,
+        kyc
       },
       process.env.JWT_SECRET
-    );
+    )
 
     // Send response with user details and JWT token
     res.status(200).json({
@@ -298,55 +300,57 @@ const Login = async (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        company: user.company, // Include company details if not Admin
-        branchId: branchId, // Include branchId
+        company: user.company,
+        branchId: branchId // Include branchId
       },
-      token,
-    });
+      membership,
+      kyc,
+      token
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         status: 'error',
         message: 'Validation failed',
-        errors: error.errors,
-      });
+        errors: error.errors
+      })
     }
-    next(error);
+    next(error)
   }
-};
+}
 
 const GetAllUser = async (req, res, next) => {
   try {
-    const { role, companyId: userCompanyId } = req.user; // Assumes `req.user` contains the authenticated user's info
+    const { role, companyId: userCompanyId } = req.user // Assumes `req.user` contains the authenticated user's info
     const {
       page = 1,
       limit = 10,
       searchTerm = '',
-      companyId: queryCompanyId,
-    } = req.query; // Pagination and search parameters
+      companyId: queryCompanyId
+    } = req.query // Pagination and search parameters
 
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const offset = (pageNum - 1) * limitNum;
+    const pageNum = parseInt(page, 10)
+    const limitNum = parseInt(limit, 10)
+    const offset = (pageNum - 1) * limitNum
 
-    let users, totalUsers;
+    let users, totalUsers
     const searchConditions = searchTerm
       ? {
           OR: [
             { name: { contains: searchTerm } },
-            { email: { contains: searchTerm } },
-          ],
+            { email: { contains: searchTerm } }
+          ]
         }
-      : {};
+      : {}
 
     // Initialize the where condition
-    let whereCondition = { ...searchConditions };
+    let whereCondition = { ...searchConditions }
 
     switch (role) {
       case 'SUPER_ADMIN':
         // SUPER_ADMIN: Can view users from all companies, optionally filtered by companyId in the query
         if (queryCompanyId) {
-          whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined; // Filter by companyId from query if provided
+          whereCondition.companyId = parseInt(queryCompanyId, 10) || undefined // Filter by companyId from query if provided
         }
 
         users = await db.user.findMany({
@@ -354,51 +358,51 @@ const GetAllUser = async (req, res, next) => {
           skip: offset,
           take: limitNum,
           include: {
-            company: true, // Include company details for users
-          },
-        });
+            company: true // Include company details for users
+          }
+        })
 
         totalUsers = await db.user.count({
-          where: whereCondition,
-        });
-        break;
+          where: whereCondition
+        })
+        break
 
       case 'ADMIN':
       case 'SUBADMIN':
         // ADMIN & SUBADMIN: Can view users in their own company
         if (!userCompanyId) {
           return res.status(400).json({
-            error: 'No company associated with the user.',
-          });
+            error: 'No company associated with the user.'
+          })
         }
 
-        whereCondition.companyId = userCompanyId; // Restrict users to their own company
+        whereCondition.companyId = userCompanyId // Restrict users to their own company
 
         users = await db.user.findMany({
           where: whereCondition,
           skip: offset,
           take: limitNum,
           include: {
-            company: true,
-          },
-        });
+            company: true
+          }
+        })
 
         totalUsers = await db.user.count({
-          where: whereCondition,
-        });
-        break;
+          where: whereCondition
+        })
+        break
 
       case 'MANAGER':
         // MANAGER: Not allowed to view users
         return res.status(403).json({
-          error: 'You do not have permission to view users.',
-        });
+          error: 'You do not have permission to view users.'
+        })
 
       default:
         // Unauthorized role
         return res.status(403).json({
-          error: 'Unauthorized role for accessing users.',
-        });
+          error: 'Unauthorized role for accessing users.'
+        })
     }
 
     return res.status(200).json({
@@ -406,80 +410,80 @@ const GetAllUser = async (req, res, next) => {
       users,
       total: totalUsers,
       page: pageNum,
-      limit: limitNum,
-    });
+      limit: limitNum
+    })
   } catch (error) {
-    console.error('Error in GetAllUser:', error);
-    next(error); // Pass the error to error-handling middleware
+    console.error('Error in GetAllUser:', error)
+    next(error) // Pass the error to error-handling middleware
   }
-};
+}
 
 const GetLoggedInUser = async (req, res, next) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId
 
     // Fetch the logged-in user's details from the database
     const user = await db.user.findUnique({
       where: { id: userId },
       include: {
         company: true,
-        branches: true,
+        branches: true
         // Include company details if needed
-      },
-    });
+      }
+    })
 
     // Check if the user exists
     if (!user) {
-      throw new AppError('User not found!', 404);
+      throw new AppError('User not found!', 404)
     }
 
     // Respond with the user's profile
     res.status(200).json({
       status: 'success',
-      user,
-    });
+      user
+    })
   } catch (error) {
-    console.error('Error fetching user profile:', error);
-    next(new AppError('Failed to fetch user profile', 500));
+    console.error('Error fetching user profile:', error)
+    next(new AppError('Failed to fetch user profile', 500))
   }
-};
+}
 
 const UpdateUser = async (req, res, next) => {
-  const { id } = req.params;
-  const { email, name, avatar } = req.body;
+  const { id } = req.params
+  const { email, name, avatar } = req.body
 
-  console.log(req.user, 'user token');
-  console.log(id, 'user id');
-  console.log(req.body, 'request body');
+  console.log(req.user, 'user token')
+  console.log(id, 'user id')
+  console.log(req.body, 'request body')
 
   try {
     // Prevent super admin from editing their own account
     if (req.user.role === 'SUPER_ADMIN' && parseInt(id) === req.user.userId) {
-      throw new AppError('Super admin cannot edit their own account!', 403);
+      throw new AppError('Super admin cannot edit their own account!', 403)
     }
 
     // Validate request body using Zod schema
-    UpdateUserSchema.parse(req.body);
+    UpdateUserSchema.parse(req.body)
 
     // Find the user to be updated
     const existingUser = await db.user.findUnique({
-      where: { id: parseInt(id) },
-    });
+      where: { id: parseInt(id) }
+    })
 
-    console.log(existingUser, 'existing user');
+    console.log(existingUser, 'existing user')
 
     if (!existingUser) {
-      throw new AppError('User not found!', 404);
+      throw new AppError('User not found!', 404)
     }
 
     // Check if the email is already taken by another user
     if (email && email !== existingUser.email) {
       const emailExists = await db.user.findUnique({
-        where: { email },
-      });
+        where: { email }
+      })
 
       if (emailExists) {
-        throw new AppError('Email already in use by another user!', 400);
+        throw new AppError('Email already in use by another user!', 400)
       }
     }
 
@@ -496,63 +500,63 @@ const UpdateUser = async (req, res, next) => {
         email: email || existingUser.email,
         name: name || existingUser.name,
         avatar: avatar || existingUser.avatar,
-        companyId: existingUser.companyId,
-      },
-    });
+        companyId: existingUser.companyId
+      }
+    })
 
     // Respond with success message and updated user data
     res.status(200).json({
       message: 'User updated successfully!',
-      user: updatedUser,
-    });
+      user: updatedUser
+    })
   } catch (error) {
     // Handle Zod validation errors
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         status: 'error',
         message: 'Validation failed',
-        errors: error.errors,
-      });
+        errors: error.errors
+      })
     }
 
-    next(error);
+    next(error)
   }
-};
+}
 
 // ----- --- --- forget password ---- --- ---
 const ForgetPass = async (req, res, next) => {
   try {
     // 1. Extract email from the request body.
-    const { email } = req.body;
+    const { email } = req.body
     if (!email) {
-      return res.status(400).json({ message: 'Email is required.' });
+      return res.status(400).json({ message: 'Email is required.' })
     }
 
-    console.log(req.body, 'hello');
+    console.log(req.body, 'hello')
 
     // 2. Find the user by email.
     const user = await db.user.findUnique({
-      where: { email },
-    });
+      where: { email }
+    })
 
     // 3. For security, respond with the same message even if the user doesn't exist.
     if (!user) {
       return res.status(200).json({
         message:
-          'If that email address is in our database, we will send you a password reset link.',
-      });
+          'If that email address is in our database, we will send you a password reset link.'
+      })
     }
 
     // 4. Generate a secure reset token.
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString('hex')
 
-    console.log(resetToken, 'reset token');
+    console.log(resetToken, 'reset token')
 
     // 5. Hash the reset token with bcryptjs before saving.
-    const hashedResetToken = await bcrypt.hash(resetToken, 10);
+    const hashedResetToken = await bcrypt.hash(resetToken, 10)
 
     // 6. Set the token expiration time (e.g., 1 hour from now).
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 3600000 ms = 1 hour
+    const resetTokenExpiry = new Date(Date.now() + 3600000) // 3600000 ms = 1 hour
 
     // 7. Update the user record with the hashed reset token, expiration,
     //    and update password_visible with the plain reset token.
@@ -561,15 +565,15 @@ const ForgetPass = async (req, res, next) => {
       data: {
         resetPasswordToken: hashedResetToken,
         resetPasswordExpires: resetTokenExpiry,
-        password_visible: resetToken, // storing the plain token
-      },
-    });
+        password_visible: resetToken // storing the plain token
+      }
+    })
 
     // 8. Construct the password reset URL.
     // Ensure you have set FRONTEND_URL in your environment variables.
     const resetUrl = `${
       process.env.FRONTEND_URL
-    }/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    }/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
 
     // 9. Compose the email message.
     const message = `
@@ -578,55 +582,55 @@ const ForgetPass = async (req, res, next) => {
       <p><a href="${resetUrl}" target="_blank">Reset Your Password</a></p>
       <p>This link will expire in one hour.</p>
       <p>If you did not request a password reset, please ignore this email.</p>
-    `;
+    `
 
     // 10. Send the email using the sendEmail utility.
     await sendEmail({
       to: email,
       subject: 'Password Reset Request',
-      html: message,
-    });
+      html: message
+    })
 
     // 11. Respond with a generic success message.
     res.status(200).json({
       message:
-        'If that email address is in our database, we will send you a password reset link.',
-    });
+        'If that email address is in our database, we will send you a password reset link.'
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 const ResetPassword = async (req, res, next) => {
   try {
     // 1. Extract email, token, and new password from the request body.
-    const { email, token, password } = req.body;
+    const { email, token, password } = req.body
     if (!email) {
-      return res.status(400).json({ message: 'Email are required.' });
+      return res.status(400).json({ message: 'Email are required.' })
     }
 
     // 2. Find the user by email.
     const user = await db.user.findUnique({
-      where: { email },
-    });
+      where: { email }
+    })
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid email or token.' });
+      return res.status(400).json({ message: 'Invalid email or token.' })
     }
 
     // 3. Check if the reset token has expired.
     if (user.resetPasswordExpires && user.resetPasswordExpires < new Date()) {
-      return res.status(400).json({ message: 'Reset token has expired.' });
+      return res.status(400).json({ message: 'Reset token has expired.' })
     }
 
     // 4. Validate the provided token against the stored hashed token.
-    const isValidToken = await bcrypt.compare(token, user.resetPasswordToken);
+    const isValidToken = await bcrypt.compare(token, user.resetPasswordToken)
     if (!isValidToken) {
-      return res.status(400).json({ message: 'Invalid token.' });
+      return res.status(400).json({ message: 'Invalid token.' })
     }
 
     // 5. Hash the new password.
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10)
 
     // 6. Update the user record:
     //    - Set the new hashed password.
@@ -638,30 +642,30 @@ const ResetPassword = async (req, res, next) => {
         password: hashedPassword,
         password_visible: password,
         resetPasswordToken: null,
-        resetPasswordExpires: null,
-      },
-    });
+        resetPasswordExpires: null
+      }
+    })
 
     // 7. Respond with a success message.
-    res.status(200).json({ message: 'Password reset successfully.' });
+    res.status(200).json({ message: 'Password reset successfully.' })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 // TODO: Delete user api
 const DeleteUser = async (req, res, next) => {
-  const { id } = req.params;
-  const { userId, role, companyId } = req.user; // userId is the ID of the logged-in user
+  const { id } = req.params
+  const { userId, role, companyId } = req.user // userId is the ID of the logged-in user
 
   try {
     // Find the user to be deleted
     const existingUser = await db.user.findUnique({
-      where: { id: parseInt(id) },
-    });
+      where: { id: parseInt(id) }
+    })
 
     if (!existingUser) {
-      throw new AppError('User not found!', 404);
+      throw new AppError('User not found!', 404)
     }
 
     // Skip the companyId check for SUPER_ADMIN, as they can delete any user
@@ -669,7 +673,7 @@ const DeleteUser = async (req, res, next) => {
       throw new AppError(
         'You can only delete users from your own company!',
         403
-      );
+      )
     }
 
     // Role-based deletion checks
@@ -685,7 +689,7 @@ const DeleteUser = async (req, res, next) => {
         throw new AppError(
           'ADMIN cannot delete another ADMIN or themselves',
           403
-        );
+        )
       }
 
       // ADMIN can only delete SUBADMIN and MANAGER
@@ -693,79 +697,79 @@ const DeleteUser = async (req, res, next) => {
         throw new AppError(
           'ADMIN can only delete SUBADMIN and MANAGER users',
           403
-        );
+        )
       }
     }
     // Check if user trying to delete is SUBADMIN
     else if (role === 'SUBADMIN') {
       // SUBADMIN can only delete MANAGER users
       if (existingUser.role !== 'MANAGER') {
-        throw new AppError('SUBADMIN can only delete MANAGER users', 403);
+        throw new AppError('SUBADMIN can only delete MANAGER users', 403)
       }
     }
 
     // If the checks pass, delete the user
     await db.user.delete({
-      where: { id: parseInt(id) },
-    });
+      where: { id: parseInt(id) }
+    })
 
     res.status(200).json({
-      message: 'User deleted successfully!',
-    });
+      message: 'User deleted successfully!'
+    })
   } catch (error) {
-    console.error('Error deleting user:', error);
-    next(new AppError('Failed to delete user', 500));
+    console.error('Error deleting user:', error)
+    next(new AppError('Failed to delete user', 500))
   }
-};
+}
 
 const GetRecentUsers = async (req, res, next) => {
   try {
-    const { role, companyId } = req.user;
+    const { role, companyId } = req.user
 
     // Admin: Fetch all users, Subadmin: Fetch only users from their own company
     const whereCondition =
-      role === 'SUPER_ADMIN' ? {} : { companyId: companyId };
+      role === 'SUPER_ADMIN' ? {} : { companyId: companyId }
 
     // Fetch the last 5 users created, sorted by creation date (descending)
     const recentUsers = await db.user.findMany({
       where: whereCondition, // Use the appropriate condition based on the role
       orderBy: {
-        created_at: 'desc', // Sort by creation date in descending order
+        created_at: 'desc' // Sort by creation date in descending order
       },
       take: 5,
       include: {
         company: true,
-        branches: true, // Include company and branch details if needed
-      },
-    });
+        branches: true // Include company and branch details if needed
+      }
+    })
 
-    res.json(recentUsers);
+    res.json(recentUsers)
   } catch (error) {
-    console.error('Error fetching recent users:', error);
+    console.error('Error fetching recent users:', error)
     res
       .status(500)
-      .json({ message: 'Error fetching recent users', error: error.message });
+      .json({ message: 'Error fetching recent users', error: error.message })
   }
-};
+}
 
 const CreateFirstAdmin = async (req, res, next) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name } = req.body
 
     // Check if an Admin already exists
     const existingAdmin = await db.user.findFirst({
-      where: { role: 'SUPER_ADMIN' },
-    });
+      where: { role: 'SUPER_ADMIN' }
+    })
 
     if (existingAdmin) {
       throw new AppError(
         'Admin already exists. Use an existing Admin to create new users.',
         400
-      );
+      )
     }
 
     // Hash the password
-    const hashedPassword = hashSync(password, 10);
+    const hashedPassword = hashSync(password, 10)
 
     // Create the first Admin
     const firstAdmin = await db.user.create({
@@ -776,18 +780,18 @@ const CreateFirstAdmin = async (req, res, next) => {
         name: name || 'Admin User',
         role: 'SUPER_ADMIN',
         avatar:
-          'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg', // Default avatar
-      },
-    });
+          'https://img.freepik.com/free-vector/illustration-businessman_53876-5856.jpg' // Default avatar
+      }
+    })
 
     res.status(201).json({
       message: 'First Super Admin created successfully!',
-      user: firstAdmin,
-    });
+      user: firstAdmin
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 module.exports = {
   CreateUser,
@@ -799,5 +803,5 @@ module.exports = {
   ResetPassword,
   DeleteUser,
   GetRecentUsers,
-  CreateFirstAdmin,
-};
+  CreateFirstAdmin
+}

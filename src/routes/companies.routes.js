@@ -2,6 +2,7 @@ const { Router } = require('express');
 const authorizeAdmin = require('../middleware/authorizeAdmin');
 const {
   createCompany,
+  registerCompany,
   upload, // Import upload here
   getAllCompanies,
   updateCompany,
@@ -14,6 +15,7 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 const companyRoutes = Router();
 
+companyRoutes.post('/registerCompany', registerCompany);
 companyRoutes.post(
   '/createCompany',
   upload, // Use upload middleware here

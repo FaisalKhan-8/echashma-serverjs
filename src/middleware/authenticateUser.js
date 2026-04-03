@@ -23,7 +23,8 @@ const authenticateUser = (req, res, next) => {
       role: decoded.role,
       companyId: decoded.companyId,
       branchId: decoded.branchId,
-      // Add any other fields you need from the token, such as email, name, etc.
+      membership: decoded.membership ?? null,
+      kyc: decoded.kyc ?? null,
     };
 
     // Proceed to the next middleware or route handler
