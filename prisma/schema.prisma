@@ -25,6 +25,8 @@ model User {
   company              Company?  @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "User_Company_fkey")
   branches             Branch[]  @relation("UserBranches")
   Company              Company?  @relation(fields: [companyId], references: [id])
+  membershipPlansCreated MembershipPlan[] @relation("MembershipPlanCreatedBy")
+  membershipPlansUpdated MembershipPlan[] @relation("MembershipPlanUpdatedBy")
 }
 
 model Company {
@@ -65,6 +67,74 @@ model Company {
   VisionType      VisionType[]      @relation("CompanyVisionType")
   User            User[]
   Product         Product[]
+  couponUsages    CouponCompanyUsage[]
+}
+
+model MembershipPlan {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique @db.VarChar(100)
+  description         String?  @db.VarChar(500)
+  order               Int      @default(0)
+  monthlyPrice        Decimal  @db.Decimal(10, 2)
+  monthlyOldAmount    Decimal? @db.Decimal(10, 2)
+  threeMonthPrice     Decimal? @db.Decimal(10, 2)
+  threeMonthOldAmount Decimal? @db.Decimal(10, 2)
+  sixMonthPrice       Decimal? @db.Decimal(10, 2)
+  sixMonthOldAmount   Decimal? @db.Decimal(10, 2)
+  annualPrice         Decimal? @db.Decimal(10, 2)
+  annualOldAmount     Decimal? @db.Decimal(10, 2)
+  gstPercentage       Decimal  @default(18) @db.Decimal(5, 2)
+  isPopular           Boolean  @default(false)
+  features            String   @default("[]") @db.NVarChar(max)
+  status              String   @default("ACTIVE") @db.VarChar(50)
+  createdBy           Int?
+  updatedBy           Int?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now()) @updatedAt
+  createdByUser       User?    @relation("MembershipPlanCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser       User?    @relation("MembershipPlanUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coupons             CouponMembershipPlan[]
+}
+
+model Coupon {
+  id                       Int                    @id @default(autoincrement())
+  code                     String                 @unique @db.VarChar(50)
+  description              String                 @db.VarChar(200)
+  discountType             String                 @db.VarChar(20)
+  discountValue            Decimal                @db.Decimal(10, 2)
+  expiryDate               DateTime?
+  usageLimit               Int?
+  usedCount                Int                    @default(0)
+  usageLimitPerCompany     Int?
+  minPurchaseAmount        Decimal?               @db.Decimal(10, 2)
+  maxDiscountAmount        Decimal?               @db.Decimal(10, 2)
+  applicableBillingPeriods String?                @db.NVarChar(max)
+  isPublic                 Boolean                @default(false)
+  status                   String                 @default("ACTIVE") @db.VarChar(20)
+  created_at               DateTime               @default(now())
+  updated_at               DateTime               @default(now()) @updatedAt
+  companyUsages            CouponCompanyUsage[]
+  membershipPlans          CouponMembershipPlan[]
+}
+
+model CouponCompanyUsage {
+  id        Int     @id @default(autoincrement())
+  couponId  Int
+  companyId Int
+  count     Int     @default(0)
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([couponId, companyId])
+}
+
+model CouponMembershipPlan {
+  couponId         Int
+  membershipPlanId Int
+  coupon           Coupon         @relation(fields: [couponId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  membershipPlan   MembershipPlan @relation(fields: [membershipPlanId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([couponId, membershipPlanId])
 }
 
 model Branch {

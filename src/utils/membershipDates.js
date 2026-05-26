@@ -1,4 +1,4 @@
-const MEMBERSHIP_TRIAL_DAYS = 15;
+const MEMBERSHIP_TRIAL_DAYS = 14;
 
 function addDaysUtc(date, days) {
   const d = new Date(date.getTime());

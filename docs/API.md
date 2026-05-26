@@ -108,7 +108,9 @@ Public self-service signup. Creates **Company** and **User** in a single databas
 | `address` | string | No | `null` | |
 | `gst` | string | No | `null` | If set, must not duplicate another company’s GST. |
 
-`kyc`, `membership`, `membershipStartDate`, and `membershipEndDate` are **not** accepted on this route. The server sets **`kyc`** to `UNVERIFIED`, **`membership`** to `TRIAL`, and the membership window (**start** = request time, **end** = start + **15 days**).
+`kyc`, `membership`, `membershipStartDate`, and `membershipEndDate` are **not** accepted on this route. The server sets **`kyc`** to `UNVERIFIED`, **`membership`** to `TRIAL`, and the membership window (**start** = request time, **end** = start + **14 days**).
+
+See also: [MEMBERSHIP_USER_API.md](./MEMBERSHIP_USER_API.md), [MEMBERSHIP_SUPER_ADMIN_API.md](./MEMBERSHIP_SUPER_ADMIN_API.md).
 
 **Example:**
 
@@ -158,7 +160,7 @@ Public self-service signup. Creates **Company** and **User** in a single databas
 | `email` | Yes | |
 | `gst` | No | |
 | `membership` | No | Defaults to `TRIAL` if omitted. |
-| `membershipStartDate` | No | ISO datetime string; default from DB / 15-day rule same as register. |
+| `membershipStartDate` | No | ISO datetime string; default from DB / 14-day rule same as register. |
 | `membershipEndDate` | No | ISO datetime string. |
 | `userId` | No | Repeat field or array as supported by client; each value is a user id string → connected to company. |
 
@@ -217,7 +219,7 @@ Public self-service signup. Creates **Company** and **User** in a single databas
 | `companyId` | Target company id. |
 | `companyName`, `address`, `contactPerson`, `phone`, `email`, `gst` | Partial updates use “keep existing” style where implemented. |
 | `membership` | Only updated if sent. |
-| `membershipStartDate`, `membershipEndDate` | ISO datetime strings; if either is sent, the other may be filled using the 15-day rule. |
+| `membershipStartDate`, `membershipEndDate` | ISO datetime strings; if either is sent, the other may be filled using the 14-day rule. |
 | `userId` | Connect listed user ids to company when provided. |
 
 **Files:** same field names as create (`pancard`, `adharcard`, `companyLogo`) when updating assets.
@@ -283,6 +285,9 @@ These are mounted under `/api` as in `src/routes/index.js`:
 | `/brand` | Brands |
 | `/inventory` | Inventory |
 | `/whatsapp` | WhatsApp (separate router) |
+| `/membership-plans` | Membership pricing catalog |
+| `/membership` | Company membership status / trial |
+| `/coupons` | Discount coupons ([detail](./COUPONS_API.md)) |
 
 For request/response shapes, refer to the matching `src/routes/*.routes.js` and controller or Zod schemas in `src/schema/`.
 

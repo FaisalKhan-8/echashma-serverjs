@@ -1,0 +1,19 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+IF COL_LENGTH('dbo.MembershipPlan', 'maxStudents') IS NOT NULL
+  ALTER TABLE [dbo].[MembershipPlan] DROP COLUMN [maxStudents];
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH
