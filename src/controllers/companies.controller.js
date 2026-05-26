@@ -3,8 +3,7 @@ const z = require('zod')
 const bcrypt = require('bcryptjs')
 const { hashSync } = bcrypt
 const multer = require('multer')
-const path = require('path')
-const fs = require('fs')
+const { randomUUID } = require('crypto')
 const {
   CreateCompanySchema,
   UpdateCompanySchema,
@@ -16,31 +15,15 @@ const {
   newRegistrationMembershipDates
 } = require('../utils/membershipDates.js')
 const cache = require('../utils/cache')
+const { uploadMulterFile } = require('../utils/s3.js')
 
 function cacheKey(companyId) {
   return `company:${companyId}:whatsapp`
 }
-// Ensure the uploads directory exists
-const uploadDir = path.join(process.cwd(), 'uploads')
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true })
-}
-
-// Set up multer for image upload
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir) // Use the uploads directory
-  },
-  filename: function (req, file, cb) {
-    // Fetch the username from the request body
-    const username = req.body.contactPerson || 'anonymous' // Default to "anonymous" if no username provided
-    const sanitizedUsername = username.replace(/\s+/g, '_') // Replace spaces with underscores
-    cb(null, `${sanitizedUsername}-${file.originalname}`)
-  }
-})
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) {
       return cb(new Error('Only images are allowed'), false)
@@ -95,16 +78,16 @@ const createCompany = async (req, res, next) => {
       )
     }
 
-    // Get file paths for PAN card and Aadhaar card images
-    const pancardImage = req.files?.pancard
-      ? req.files.pancard[0].filename
-      : null // Get only the filename
-    const aadhaarcardImage = req.files?.adharcard
-      ? req.files.adharcard[0].filename
-      : null // Get only the filename
-    const companyLogoImage = req.files?.companyLogo
-      ? req.files.companyLogo[0].filename
-      : null // Get only the filename
+    const s3Folder = `companies/${randomUUID()}`
+    const pancardImage = req.files?.pancard?.[0]
+      ? await uploadMulterFile(req.files.pancard[0], s3Folder)
+      : null
+    const aadhaarcardImage = req.files?.adharcard?.[0]
+      ? await uploadMulterFile(req.files.adharcard[0], s3Folder)
+      : null
+    const companyLogoImage = req.files?.companyLogo?.[0]
+      ? await uploadMulterFile(req.files.companyLogo[0], s3Folder)
+      : null
 
     // Check if the GST number is already in use
     if (gst) {
@@ -265,15 +248,8 @@ const REGISTER_COMPANY_MEMBERSHIP = 'TRIAL'
 const registerCompany = async (req, res, next) => {
   try {
     const parsedBody = RegisterCompanySchema.parse(req.body)
-    const {
-      companyName,
-      email,
-      phone,
-      contactPerson,
-      password,
-      address,
-      gst
-    } = parsedBody
+    const { companyName, email, phone, contactPerson, password, address, gst } =
+      parsedBody
 
     const membershipDates = newRegistrationMembershipDates()
 
@@ -680,22 +656,21 @@ const updateDocument = async (req, res, next) => {
       throw new AppError('Company not found!', 404)
     }
 
-    // Get file paths for PAN card and Aadhaar card images
-    const pancardImage = req.files?.pancard
-      ? req.files.pancard[0].filename
+    const companyIdNum = Number(companyId)
+    const s3Folder = `companies/${companyIdNum}/documents`
+    const pancardImage = req.files?.pancard?.[0]
+      ? await uploadMulterFile(req.files.pancard[0], s3Folder)
       : null
-    const aadhaarcardImage = req.files?.adharcard
-      ? req.files.adharcard[0].filename
+    const aadhaarcardImage = req.files?.adharcard?.[0]
+      ? await uploadMulterFile(req.files.adharcard[0], s3Folder)
       : null
-    const companyLogoImage = req.files?.companyLogo
-      ? req.files.companyLogo[0].filename
-      : null // Get only the filename
+    const companyLogoImage = req.files?.companyLogo?.[0]
+      ? await uploadMulterFile(req.files.companyLogo[0], s3Folder)
+      : null
 
-    // Prepare update object
     const updateData = {}
     if (pancardImage) updateData.pancard = pancardImage
     if (aadhaarcardImage) updateData.aadhaarcard = aadhaarcardImage
-    if (pancardImage) updateData.pancard = pancardImage
     if (companyLogoImage) updateData.companyLogo = companyLogoImage
 
     if (Object.keys(updateData).length === 0) {

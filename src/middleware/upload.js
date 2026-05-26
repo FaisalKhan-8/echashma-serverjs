@@ -1,36 +1,8 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 const { AppError } = require('../errors/AppError');
 
-// Ensure the uploads directory exists
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Sanitize and validate username
-const sanitizeUsername = (username) => {
-  if (!username || typeof username !== 'string') return 'anonymous';
-  const sanitized = username.trim().replace(/\s+/g, '_');
-  return sanitized.slice(0, 30); // Limit to 30 characters
-};
-
-// Set up multer for image upload
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir); // Use the uploads directory
-  },
-  filename: function (req, file, cb) {
-    const username = sanitizeUsername(req.body.contactPerson || 'anonymous');
-    const uniqueId = uuidv4(); // Generate a unique identifier
-    cb(null, `${username}-${uniqueId}-${file.originalname}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) {
       return cb(new AppError('Only image files are allowed', 400));
@@ -38,7 +10,7 @@ const upload = multer({
     cb(null, true);
   },
   limits: {
-    fileSize: 5 * 1024 * 1024, // Limit file size to 5 MB
+    fileSize: 8 * 1024 * 1024,
   },
 }).fields([
   { name: 'pancard', maxCount: 1 },

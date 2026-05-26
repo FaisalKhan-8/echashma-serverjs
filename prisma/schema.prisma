@@ -35,12 +35,14 @@ model Company {
   phone           String?           @db.VarChar(20)
   email           String            @unique @db.VarChar(255)
   gst             String?           @db.VarChar(50)
-  pancard         String?           @db.VarChar(50)
-  aadhaarcard     String?           @db.VarChar(50)
+  pancard         String?           @db.VarChar(512)
+  aadhaarcard     String?           @db.VarChar(512)
+  aadhaarNo       String?           @db.VarChar(20)
+  panNo           String?           @db.VarChar(20)
   created_at      DateTime          @default(now())
   updated_at      DateTime          @default(now()) @updatedAt
   uuid            String            @unique @default(uuid()) @db.UniqueIdentifier
-  companyLogo     String?           @db.VarChar(255)
+  companyLogo     String?           @db.VarChar(512)
   whatsappPhoneId String?           @db.VarChar(255)
   whatsappToken   String?           @db.VarChar(500)
   kyc             String            @default("UNVERIFIED") @db.VarChar(50)

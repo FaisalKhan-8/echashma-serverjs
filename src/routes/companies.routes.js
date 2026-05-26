@@ -12,10 +12,18 @@ const {
   setCompanyWhatsAppConfig,
 } = require('../controllers/companies.controller');
 const authenticateUser = require('../middleware/authenticateUser');
+const { kycUploadMiddleware } = require('../middleware/kycUpload');
+const { submitKyc } = require('../controllers/kyc.controller');
 
 const companyRoutes = Router();
 
 companyRoutes.post('/registerCompany', registerCompany);
+companyRoutes.post(
+  '/kyc/submit',
+  authenticateUser,
+  kycUploadMiddleware,
+  submitKyc
+);
 companyRoutes.post(
   '/createCompany',
   upload, // Use upload middleware here

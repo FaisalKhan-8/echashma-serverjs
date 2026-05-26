@@ -7,6 +7,7 @@ const { z } = require('zod')
 const upload = require('../middleware/upload.js')
 const crypto = require('crypto')
 const sendEmail = require('../utils/sendEmail.js')
+const { uploadMulterFile } = require('../utils/s3.js')
 
 const { hashSync, compare } = bcrypt
 
@@ -37,19 +38,24 @@ const CreateUser = async (req, res, next) => {
       throw new AppError('Missing required fields: password is mandatory', 400)
     }
 
-    // Extract file paths for pancard and aadhaarcard
     let pancardPath = null
     let aadhaarcardPath = null
     let companyLogoPath = null
 
     if (req.files) {
-      pancardPath = req.files?.pancard ? req.files.pancard[0].path : null
-      aadhaarcardPath = req.files?.adharcard
-        ? req.files.adharcard[0].path
-        : null
-      companyLogoPath = req.files?.companyLogo
-        ? req.files.companyLogo[0].filename
-        : null // Get only the filename
+      const folder = `companies/${crypto.randomUUID()}`
+      if (req.files.pancard?.[0]) {
+        pancardPath = await uploadMulterFile(req.files.pancard[0], folder)
+      }
+      if (req.files.adharcard?.[0]) {
+        aadhaarcardPath = await uploadMulterFile(req.files.adharcard[0], folder)
+      }
+      if (req.files.companyLogo?.[0]) {
+        companyLogoPath = await uploadMulterFile(
+          req.files.companyLogo[0],
+          folder
+        )
+      }
     }
 
     console.log('companyLogoPath ==>', companyLogoPath)
