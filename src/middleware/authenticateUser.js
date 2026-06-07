@@ -2,6 +2,10 @@ const jwt = require('jsonwebtoken');
 const { AppError } = require('../errors/AppError.js'); // Adjust the path as needed
 
 const authenticateUser = (req, res, next) => {
+  if (req.user) {
+    return next();
+  }
+
   // Get the token from the Authorization header
   const authHeader = req.headers.authorization;
 

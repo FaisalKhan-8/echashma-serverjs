@@ -14,10 +14,42 @@ const {
 const authenticateUser = require('../middleware/authenticateUser');
 const { kycUploadMiddleware } = require('../middleware/kycUpload');
 const { submitKyc } = require('../controllers/kyc.controller');
+const {
+  sendEmailOtp,
+  verifyEmailOtp,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  getVerificationStatus,
+} = require('../controllers/companyVerification.controller');
 
 const companyRoutes = Router();
 
 companyRoutes.post('/registerCompany', registerCompany);
+companyRoutes.post(
+  '/verification/email/send',
+  authenticateUser,
+  sendEmailOtp
+);
+companyRoutes.post(
+  '/verification/email/verify',
+  authenticateUser,
+  verifyEmailOtp
+);
+companyRoutes.post(
+  '/verification/phone/send',
+  authenticateUser,
+  sendPhoneOtp
+);
+companyRoutes.post(
+  '/verification/phone/verify',
+  authenticateUser,
+  verifyPhoneOtp
+);
+companyRoutes.get(
+  '/me/verification-status',
+  authenticateUser,
+  getVerificationStatus
+);
 companyRoutes.post(
   '/kyc/submit',
   authenticateUser,

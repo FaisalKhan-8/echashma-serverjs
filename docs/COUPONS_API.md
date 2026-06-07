@@ -40,7 +40,7 @@ Authorization: Bearer <token>
 
 **`status`:** `ACTIVE` \| `INACTIVE` \| `EXPIRED`
 
-**`billingPeriod` (verify + restrictions):** `MONTHLY` \| `THREE_MONTH` \| `SIX_MONTH` \| `ANNUAL`
+**`billingPeriod` (verify + restrictions):** `monthly` \| `threeMonth` \| `sixMonth` \| `annual` — or legacy `MONTHLY` \| `THREE_MONTH` \| `SIX_MONTH` \| `ANNUAL`
 
 ---
 
@@ -54,9 +54,9 @@ Authorization: Bearer <token>
 | `discountType` | string | `PERCENTAGE` or `FIXED` |
 | `discountValue` | number | % or fixed amount |
 | `expiryDate` | string \| `null` | ISO date |
-| `usageLimit` | number \| `null` | Global max uses; `null` = unlimited |
+| `usageLimit` | number \| `null` | Global max uses; `null` or `0` = unlimited |
 | `usedCount` | number | Global usage count |
-| `usageLimitPerCompany` | number \| `null` | Per-company max; `null` = unlimited |
+| `usageLimitPerCompany` | number \| `null` | Per-company max; `null` or `0` = unlimited |
 | `companyUsage` | array | `{ companyId, count }[]` |
 | `minPurchaseAmount` | number \| `null` | |
 | `maxDiscountAmount` | number \| `null` | Cap for percentage discounts |
@@ -99,23 +99,32 @@ Authorization: Bearer <token>
 
 ## `POST /coupons/verify`
 
+Validate a coupon **before checkout** (same behaviour as NestJS `verifyCouponWithDetails`). Does **not** increment usage — that happens on successful payment via internal `applyCoupon`.
+
+**Auth:** JWT with `companyId` (maps to **institute** in the NestJS API).
+
 **Body:**
 
 ```json
 {
   "code": "WELCOME20",
-  "purchaseAmount": 1500,
+  "purchaseAmount": 9999,
   "membershipPlanId": 1,
-  "billingPeriod": "MONTHLY"
+  "billingPeriod": "annual"
 }
 ```
 
 | Field | Required | Notes |
 |-------|----------|--------|
-| `code` | Yes | |
-| `purchaseAmount` | Yes | Amount before discount |
-| `membershipPlanId` | If coupon is plan-restricted | |
-| `billingPeriod` | If coupon is period-restricted | |
+| `code` | Yes | Case-insensitive; stored uppercased |
+| `purchaseAmount` | Yes | Base plan price before discount (≥ 0) |
+| `membershipPlanId` | If coupon is plan-restricted | Integer plan id |
+| `billingPeriod` | If coupon is period-restricted | See billing period formats below |
+
+### Billing period formats (both accepted)
+
+Transaction-style: `monthly`, `threeMonth`, `sixMonth`, `annual`  
+Legacy/admin-style: `MONTHLY`, `THREE_MONTH`, `SIX_MONTH`, `ANNUAL`
 
 **Success:** `200`
 
@@ -123,22 +132,45 @@ Authorization: Bearer <token>
 {
   "data": {
     "valid": true,
-    "discount": 300,
-    "coupon": { "...": "..." },
+    "discount": 500,
+    "coupon": { "id": 1, "code": "WELCOME20", "...": "..." },
     "errors": {},
     "companyUsageCount": 0,
-    "companyUsageLimit": 1
+    "companyUsageLimit": 1,
+    "instituteUsageCount": 0,
+    "instituteUsageLimit": 1
   }
 }
 ```
 
-When invalid, `valid` is `false`, `discount` is `0`, `coupon` is `null`, and `errors` maps field names to message arrays (same shape as the Nest service).
+When invalid:
+
+```json
+{
+  "data": {
+    "valid": false,
+    "discount": 0,
+    "coupon": null,
+    "errors": {
+      "minPurchaseAmount": ["Minimum purchase amount of ₹500 is required. Your purchase amount is ₹100."]
+    },
+    "companyUsageCount": 0,
+    "companyUsageLimit": null,
+    "instituteUsageCount": 0,
+    "instituteUsageLimit": null
+  }
+}
+```
+
+`instituteUsageCount` / `instituteUsageLimit` mirror the NestJS response; **company** fields are the same values in this stack.
+
+**Errors (HTTP):** `400` if JWT has no `companyId`.
 
 ---
 
 ## Applying usage after payment
 
-Call `applyCoupon(code, companyId)` from `coupon.controller.js` after a successful transaction (not exposed as HTTP). It increments global and per-company usage counts.
+`applyCoupon(code, companyId)` runs automatically inside `confirmPayment` after Cashfree success. **Not exposed as HTTP** — prevents abuse before payment completes.
 
 ---
 

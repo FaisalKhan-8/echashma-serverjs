@@ -17,6 +17,7 @@ Authorization: Bearer <token>
 | Middleware | Who can access |
 |------------|----------------|
 | **None** | Public (no header) |
+| `requireMembership` | Global gate on `/api` — active trial or paid membership for company users (see [MEMBERSHIP_MIDDLEWARE.md](./MEMBERSHIP_MIDDLEWARE.md)) |
 | `authenticateUser` | Any logged-in user (valid JWT) |
 | `authorizeAdmin` | **SUPER_ADMIN** only (see `src/middleware/authorizeAdmin.js`) |
 
@@ -110,7 +111,7 @@ Public self-service signup. Creates **Company** and **User** in a single databas
 
 `kyc`, `membership`, `membershipStartDate`, and `membershipEndDate` are **not** accepted on this route. The server sets **`kyc`** to `UNVERIFIED`, **`membership`** to `TRIAL`, and the membership window (**start** = request time, **end** = start + **14 days**).
 
-See also: [MEMBERSHIP_USER_API.md](./MEMBERSHIP_USER_API.md), [MEMBERSHIP_SUPER_ADMIN_API.md](./MEMBERSHIP_SUPER_ADMIN_API.md).
+See also: [MEMBERSHIP_USER_API.md](./MEMBERSHIP_USER_API.md), [MEMBERSHIP_TRANSACTIONS_API.md](./MEMBERSHIP_TRANSACTIONS_API.md), [MEMBERSHIP_SUPER_ADMIN_API.md](./MEMBERSHIP_SUPER_ADMIN_API.md).
 
 **Example:**
 
@@ -287,6 +288,7 @@ These are mounted under `/api` as in `src/routes/index.js`:
 | `/whatsapp` | WhatsApp (separate router) |
 | `/membership-plans` | Membership pricing catalog |
 | `/membership` | Company membership status / trial |
+| `/transactions` | Membership purchase & Cashfree payments ([detail](./MEMBERSHIP_TRANSACTIONS_API.md)) |
 | `/coupons` | Discount coupons ([detail](./COUPONS_API.md)) |
 
 For request/response shapes, refer to the matching `src/routes/*.routes.js` and controller or Zod schemas in `src/schema/`.

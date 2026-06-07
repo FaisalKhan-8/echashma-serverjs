@@ -4,12 +4,22 @@ const dotenv = require('dotenv');
 const path = require('path');
 const rootRouter = require('./routes/index');
 const { errorHandler } = require('./middleware/errors');
+const cashfreeWebhookRawBody = require('./middleware/cashfreeWebhookRawBody');
+const { handleCashfreeWebhook } = require('./controllers/transaction.controller');
 const fs = require('fs');
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+
+// Cashfree webhook must use raw body for HMAC verification (no queue — processed inline).
+app.post(
+  '/api/transactions/webhook/cashfree',
+  cashfreeWebhookRawBody,
+  handleCashfreeWebhook
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.resolve(__dirname, 'dist')));

@@ -19,8 +19,12 @@ const WhatsappRoutes = require('./whatsapp.routes');
 const membershipPlanRoutes = require('./membershipPlan.routes');
 const membershipRoutes = require('./membership.routes');
 const couponRoutes = require('./coupon.routes');
+const transactionRoutes = require('./transaction.routes');
+const requireMembership = require('../middleware/requireMembership');
 
 const rootRouter = Router();
+
+rootRouter.use(requireMembership);
 
 rootRouter.use('/auth', authRoutes);
 rootRouter.use('/company', companyRoutes);
@@ -42,5 +46,6 @@ rootRouter.use('/whatsapp', WhatsappRoutes);
 rootRouter.use('/membership-plans', membershipPlanRoutes);
 rootRouter.use('/membership', membershipRoutes);
 rootRouter.use('/coupons', couponRoutes);
+rootRouter.use('/transactions', transactionRoutes);
 
 module.exports = rootRouter;

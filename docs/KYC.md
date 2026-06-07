@@ -1,6 +1,6 @@
 # KYC (Know Your Customer)
 
-Submit company KYC data and document scans. Files are stored in **Amazon S3** under a public (or CDN-backed) URL; the **Company** row is updated with addresses, ID numbers, document URLs, and **`kyc`** set to **`VERIFIED`** on success.
+Submit company address and an optional logo for KYC verification. When a logo file is provided, it is stored in **Amazon S3** under a public (or CDN-backed) URL. The **Company** row is updated with the address, optional logo URL, and **`kyc`** set to **`VERIFIED`** on success.
 
 Implementation: `src/controllers/kyc.controller.js`, `src/middleware/kycUpload.js`, `src/utils/s3.js`. Route registration: `src/routes/companies.routes.js`.
 
@@ -10,6 +10,7 @@ Implementation: `src/controllers/kyc.controller.js`, `src/middleware/kycUpload.j
 
 | Method | Path | Auth |
 |--------|------|------|
+| GET | `/api/company/me/verification-status` | `authenticateUser` (JWT) — see [COMPANY_VERIFICATION.md](./COMPANY_VERIFICATION.md#get-get-apicompanymeverification-status) |
 | POST | `/api/company/kyc/submit` | `authenticateUser` (JWT) |
 
 **Content-Type:** `multipart/form-data` (not JSON).
@@ -35,20 +36,20 @@ Send these as normal multipart fields (strings).
 |-------|----------|--------|
 | `companyId` | Yes | Integer company primary key (string or number in form data is fine). |
 | `address` | Yes | Non-empty after trim. |
-| `aadhaarNo` | Yes | Must normalize to **exactly 12 digits** (non-digits are stripped before check). |
-| `panNo` | No | Omit, empty, or literal `null` → stored as `null`. If present: **AAAAA9999A** (uppercased server-side). |
+
+Aadhaar number, PAN number, and ID document uploads are **not** accepted on this endpoint.
 
 ---
 
 ## Files (multipart)
 
-Multer uses **in-memory** buffers; max **8 MB** per file, up to **3** files.
+Multer uses **in-memory** buffers; max **8 MB** per file, up to **1** file.
 
 | Field | Required | Allowed MIME types |
 |-------|----------|--------------------|
-| `companyLogo` | Yes | `image/png`, `image/jpeg`, `image/jpg`, `image/webp` |
-| `adharcard` | Yes | Same images, or `application/pdf` |
-| `pancard` | No | Same as `adharcard`. If omitted, existing `pancard` URL in the database is **not** cleared. |
+| `companyLogo` | No | `image/png`, `image/jpeg`, `image/jpg`, `image/webp` |
+
+If omitted, the existing `companyLogo` URL in the database is **not** cleared.
 
 Unexpected file field names return **400**.
 
@@ -56,8 +57,8 @@ Unexpected file field names return **400**.
 
 ## Storage (S3)
 
-- Objects are uploaded under the key prefix **`kyc/{companyId}/`** (unique filenames; see `uploadPublicObject` in `src/utils/s3.js`).
-- The server stores **full public URLs** on the company for `companyLogo`, `aadhaarcard`, and optionally `pancard`.
+- When `companyLogo` is uploaded, objects are stored under the key prefix **`kyc/{companyId}/`** (unique filenames; see `uploadPublicObject` in `src/utils/s3.js`).
+- The server stores the **full public URL** on the company for `companyLogo`.
 
 ### Environment variables
 
@@ -75,12 +76,11 @@ Unexpected file field names return **400**.
 
 On success, **Company** is updated with:
 
-- `address`, `aadhaarNo`, `panNo`
-- `companyLogo`, `aadhaarcard` (S3 URLs)
-- `pancard` (S3 URL) **only** if a `pancard` file was uploaded
+- `address`
 - **`kyc`** → **`VERIFIED`**
+- `companyLogo` (S3 URL) **only** if a `companyLogo` file was uploaded
 
-Schema fields include `aadhaarNo` and `panNo` on **Company**; document columns support long URLs (see `prisma/schema.prisma`).
+Existing `companyLogo`, Aadhaar, and PAN fields on the row are left unchanged when not included in the request.
 
 ---
 
@@ -94,18 +94,21 @@ Schema fields include `aadhaarNo` and `panNo` on **Company**; document columns s
   "message": "KYC submitted successfully",
   "company": {
     "id": 1,
-    "address": "...",
-    "aadhaarNo": "123456789012",
-    "panNo": "ABCDE1234F",
-    "companyLogo": "https://...",
-    "aadhaarcard": "https://...",
-    "pancard": "https://...",
+    "address": "123 Main Street, Mumbai",
+    "companyLogo": "https://bucket.s3.region.amazonaws.com/kyc/1/logo.png",
     "kyc": "VERIFIED"
   }
 }
 ```
 
-`pancard` in the payload reflects the database row (may be an older value if no new PAN file was sent).
+| Field | Type | Notes |
+|-------|------|--------|
+| `status` | `"success"` | Always `"success"` on 200. |
+| `message` | string | Human-readable confirmation. |
+| `company.id` | number | Company primary key. |
+| `company.address` | string | Saved address after trim. |
+| `company.companyLogo` | string \| null | Public S3 URL, or `null` if the company has no logo. |
+| `company.kyc` | `"VERIFIED"` | Set on every successful submit. |
 
 ---
 
@@ -115,7 +118,7 @@ Schema fields include `aadhaarNo` and `panNo` on **Company**; document columns s
 |-----------|----------------|
 | Missing / invalid JWT | 401 |
 | Wrong role or `companyId` not allowed | 403 |
-| Invalid `companyId`, missing address, bad Aadhaar/PAN, missing required files, bad MIME type, file too large | 400 |
+| Invalid `companyId`, missing address, bad `companyLogo` MIME type, file too large, unexpected file field | 400 |
 | Company does not exist | 404 |
 | S3 / configuration error | 500 |
 
@@ -125,12 +128,14 @@ Error JSON shape matches the global handler: `{ "status": "error", "message": ".
 
 ## JWT and `kyc` in the client
 
-The login response and JWT embed **`kyc`** at issue time. After a successful KYC submit, **`kyc`** in the database is **`VERIFIED`**, but existing tokens still carry the old claim until the user **logs in again** (or your app refreshes the token from a profile endpoint that reads the DB).
+The login response and JWT embed **`kyc`** at issue time. After a successful KYC submit, **`kyc`** in the database is **`VERIFIED`**, but existing tokens still carry the old claim until the user **logs in again**.
+
+Prefer **`GET /api/company/me/verification-status`** for up-to-date KYC and contact verification state on the dashboard.
 
 ---
 
 ## Frontend alignment
 
-The web app can build the same payload as described in the product spec: `companyId`, formatted `address`, stripped `aadhaarNo`, optional `panNo`, and files keyed **`companyLogo`**, **`adharcard`** (spelling matches this API), and optional **`pancard`**. Append fields and files to **`FormData`** and `POST` to **`/api/company/kyc/submit`** with **`Authorization: Bearer &lt;token&gt;`**.
+Build **`FormData`** with required fields `companyId` and `address`, and optionally append a **`companyLogo`** file. POST to **`/api/company/kyc/submit`** with **`Authorization: Bearer <token>`**.
 
 For general API conventions (base URL, auth header), see [API.md](./API.md).

@@ -4,6 +4,7 @@ const {
   addDaysUtc,
   MEMBERSHIP_TRIAL_DAYS,
 } = require('../utils/membershipDates');
+const { getMembershipAccess, hasConsumedTrial } = require('../utils/membershipAccess');
 
 function requireCompanyId(req, res) {
   const companyId = req.user?.companyId;
@@ -20,26 +21,6 @@ function requireCompanyId(req, res) {
   return companyId;
 }
 
-function getMembershipAccess(company) {
-  const now = new Date();
-  const status = company.membership;
-  const endDate = company.membershipEndDate
-    ? new Date(company.membershipEndDate)
-    : null;
-
-  const isInTrial =
-    status === 'TRIAL' && endDate !== null && endDate > now;
-  const hasPaidAccess =
-    status === 'ACTIVE' && endDate !== null && endDate > now;
-  const hasAccess = isInTrial || hasPaidAccess;
-
-  return {
-    hasAccess,
-    isInTrial,
-    requiresPurchase: !hasAccess,
-  };
-}
-
 const getMembershipStatus = async (req, res, next) => {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
@@ -51,6 +32,8 @@ const getMembershipStatus = async (req, res, next) => {
         membership: true,
         membershipStartDate: true,
         membershipEndDate: true,
+        membershipPlanId: true,
+        membershipName: true,
       },
     });
 
@@ -66,8 +49,8 @@ const getMembershipStatus = async (req, res, next) => {
 
     res.json({
       membershipStatus: company.membership ?? null,
-      membershipPlanId: null,
-      membershipName: null,
+      membershipPlanId: company.membershipPlanId ?? null,
+      membershipName: company.membershipName ?? null,
       membershipExpiryDate,
       trialEndsAt,
       membershipStartDate: company.membershipStartDate ?? null,
@@ -119,6 +102,13 @@ const startTrial = async (req, res, next) => {
         trialEndsAtFormatted: trialEndsAt.toLocaleString(),
         daysRemaining: MEMBERSHIP_TRIAL_DAYS,
       });
+    }
+
+    if (hasConsumedTrial(company, now)) {
+      throw new AppError(
+        'You have already used your 14-day trial. Please purchase a membership to continue.',
+        400
+      );
     }
 
     const newTrialEndsAt = addDaysUtc(now, MEMBERSHIP_TRIAL_DAYS);

@@ -48,9 +48,18 @@ model Company {
   whatsappPhoneId String?           @db.VarChar(255)
   whatsappToken   String?           @db.VarChar(500)
   kyc             String            @default("UNVERIFIED") @db.VarChar(50)
+  emailVerified   Boolean           @default(false)
+  phoneVerified   Boolean           @default(false)
+  emailOtp        String?           @db.VarChar(255)
+  emailOtpExpires DateTime?
+  phoneOtp        String?           @db.VarChar(255)
+  phoneOtpExpires DateTime?
   membership      String            @default("TRIAL") @db.VarChar(50)
   membershipStartDate DateTime      @default(now())
   membershipEndDate   DateTime      @default(dbgenerated("DATEADD(day, 15, SYSUTCDATETIME())"))
+  membershipPlanId  Int?
+  membershipName    String?           @db.VarChar(100)
+  billingAddressJson String?          @db.NVarChar(max)
   branches        Branch[]          @relation("CompanyBranches")
   Brands          Brands[]          @relation("CompanyBrands")
   CoatingType     CoatingType[]     @relation("CompanyCoatingType")
@@ -68,6 +77,8 @@ model Company {
   User            User[]
   Product         Product[]
   couponUsages    CouponCompanyUsage[]
+  membershipPlan  MembershipPlan?     @relation("CompanyMembershipPlan", fields: [membershipPlanId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membershipTransactions MembershipTransaction[]
 }
 
 model MembershipPlan {
@@ -94,6 +105,43 @@ model MembershipPlan {
   createdByUser       User?    @relation("MembershipPlanCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser       User?    @relation("MembershipPlanUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   coupons             CouponMembershipPlan[]
+  companies           Company[]            @relation("CompanyMembershipPlan")
+  transactions        MembershipTransaction[]
+}
+
+model MembershipTransaction {
+  id                          Int      @id @default(autoincrement())
+  uuid                        String   @unique @default(uuid()) @db.UniqueIdentifier
+  membershipPlanId            Int
+  companyId                   Int
+  billingPeriod               String   @db.VarChar(20)
+  billingAddressJson          String   @db.NVarChar(max)
+  billingAddressSameAsCompany Boolean  @default(false)
+  paymentGateway              String   @db.VarChar(20)
+  paymentMethod               String   @db.VarChar(20)
+  priceBreakdownJson          String   @db.NVarChar(max)
+  couponCode                  String?  @db.VarChar(50)
+  successUrl                  String?  @db.VarChar(500)
+  failureUrl                  String?  @db.VarChar(500)
+  transactionStatus           String   @default("PENDING") @db.VarChar(20)
+  cashfreeOrderId             String?  @db.VarChar(45)
+  cashfreeCfOrderId           String?  @db.VarChar(100)
+  cashfreePaymentSessionId    String?  @db.VarChar(500)
+  cashfreePaymentId           String?  @db.VarChar(100)
+  cashfreeResponseJson        String?  @db.NVarChar(max)
+  failureReason               String?  @db.VarChar(500)
+  subscriptionStartDate       DateTime?
+  subscriptionEndDate         DateTime?
+  nextBillingDate             DateTime?
+  invoicePdfUrl               String?  @db.VarChar(512)
+  created_at                  DateTime @default(now())
+  updated_at                  DateTime @default(now()) @updatedAt
+  membershipPlan              MembershipPlan @relation(fields: [membershipPlanId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                     Company        @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId, created_at(sort: Desc)])
+  @@index([cashfreeOrderId])
+  @@index([transactionStatus])
 }
 
 model Coupon {

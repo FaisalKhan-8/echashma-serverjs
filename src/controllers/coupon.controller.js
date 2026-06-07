@@ -42,6 +42,15 @@ function normalizeCode(code) {
   return code.trim().toUpperCase();
 }
 
+/** null, undefined, or 0 = unlimited. */
+function isEnforcedUsageLimit(limit) {
+  return limit !== null && limit !== undefined && Number(limit) > 0;
+}
+
+function effectiveUsageLimitForResponse(limit) {
+  return isEnforcedUsageLimit(limit) ? Number(limit) : null;
+}
+
 function toResponse(coupon) {
   const planIds =
     coupon.membershipPlans?.map((p) => p.membershipPlanId) ?? [];
@@ -54,9 +63,11 @@ function toResponse(coupon) {
     discountType: coupon.discountType,
     discountValue: decimalToNumber(coupon.discountValue),
     expiryDate: coupon.expiryDate ? coupon.expiryDate.toISOString() : null,
-    usageLimit: coupon.usageLimit ?? null,
+    usageLimit: effectiveUsageLimitForResponse(coupon.usageLimit),
     usedCount: coupon.usedCount ?? 0,
-    usageLimitPerCompany: coupon.usageLimitPerCompany ?? null,
+    usageLimitPerCompany: effectiveUsageLimitForResponse(
+      coupon.usageLimitPerCompany
+    ),
     companyUsage:
       coupon.companyUsages && coupon.companyUsages.length > 0
         ? coupon.companyUsages.map((usage) => ({
@@ -110,6 +121,26 @@ async function syncMembershipPlans(couponId, planIds) {
   }
 }
 
+function normalizeBillingPeriod(period) {
+  if (period == null || period === '') return null;
+  const map = {
+    monthly: 'monthly',
+    MONTHLY: 'monthly',
+    threeMonth: 'threeMonth',
+    THREE_MONTH: 'threeMonth',
+    sixMonth: 'sixMonth',
+    SIX_MONTH: 'sixMonth',
+    annual: 'annual',
+    ANNUAL: 'annual',
+  };
+  return map[String(period).trim()] ?? String(period).trim();
+}
+
+function normalizeBillingPeriodList(periods) {
+  if (!periods?.length) return null;
+  return periods.map(normalizeBillingPeriod).filter(Boolean);
+}
+
 function getCompanyUsageCount(coupon, companyId) {
   const entry = (coupon.companyUsages || []).find(
     (usage) => usage.companyId === companyId
@@ -125,12 +156,17 @@ function runVerificationChecks(coupon, {
 }) {
   const errors = {};
   let currentCompanyCount = 0;
-  let companyUsageLimit = coupon.usageLimitPerCompany ?? null;
+  let companyUsageLimit = null;
 
   if (!coupon) {
     errors.code = ['Coupon code not found'];
     return { errors, currentCompanyCount, companyUsageLimit };
   }
+
+  companyUsageLimit = effectiveUsageLimitForResponse(
+    coupon.usageLimitPerCompany
+  );
+  const normalizedBillingPeriod = normalizeBillingPeriod(billingPeriod);
 
   if (coupon.status !== COUPON_STATUS.ACTIVE) {
     errors.status = [
@@ -145,8 +181,7 @@ function runVerificationChecks(coupon, {
   }
 
   if (
-    coupon.usageLimit !== null &&
-    coupon.usageLimit !== undefined &&
+    isEnforcedUsageLimit(coupon.usageLimit) &&
     coupon.usedCount >= coupon.usageLimit
   ) {
     errors.usageLimit = [
@@ -156,13 +191,16 @@ function runVerificationChecks(coupon, {
 
   if (companyId) {
     currentCompanyCount = getCompanyUsageCount(coupon, companyId);
+    const perCompanyLimit = coupon.usageLimitPerCompany;
     if (
-      companyUsageLimit !== null &&
-      companyUsageLimit !== undefined &&
-      currentCompanyCount >= companyUsageLimit
+      isEnforcedUsageLimit(perCompanyLimit) &&
+      currentCompanyCount >= perCompanyLimit
     ) {
       errors.usageLimitPerCompany = [
-        `Your company has already used this coupon ${currentCompanyCount} time(s). Maximum allowed usage per company is ${companyUsageLimit}.`,
+        `Your company has already used this coupon ${currentCompanyCount} time(s). Maximum allowed usage per company is ${perCompanyLimit}.`,
+      ];
+      errors.instituteUsageLimit = [
+        `Your institute has already used this coupon ${currentCompanyCount} time(s). Maximum allowed usage per institute is ${perCompanyLimit}.`,
       ];
     }
   }
@@ -188,15 +226,15 @@ function runVerificationChecks(coupon, {
     }
   }
 
-  const applicablePeriods = parseBillingPeriods(
-    coupon.applicableBillingPeriods
+  const applicablePeriods = normalizeBillingPeriodList(
+    parseBillingPeriods(coupon.applicableBillingPeriods)
   );
   if (applicablePeriods && applicablePeriods.length > 0) {
-    if (!billingPeriod) {
+    if (!normalizedBillingPeriod) {
       errors.billingPeriod = [
         'This coupon is restricted to specific billing periods. Please provide a billing period.',
       ];
-    } else if (!applicablePeriods.includes(billingPeriod)) {
+    } else if (!applicablePeriods.includes(normalizedBillingPeriod)) {
       errors.billingPeriod = [
         `This coupon is not applicable to the "${billingPeriod}" billing period. Applicable periods: ${applicablePeriods.join(', ')}.`,
       ];
@@ -418,15 +456,51 @@ const verifyCoupon = async (req, res, next) => {
       message: 'Validation failed',
       errors: {
         company: ['Company ID is missing from token'],
+        institute: ['Institute ID is missing from token'],
       },
     });
   }
 
   try {
-    const { code, purchaseAmount, membershipPlanId, billingPeriod } = req.body;
-    const coupon = await findCouponByCode(code);
+    const result = await verifyCouponWithDetails({
+      code: req.body.code,
+      purchaseAmount: req.body.purchaseAmount,
+      companyId,
+      membershipPlanId: req.body.membershipPlanId,
+      billingPeriod: req.body.billingPeriod,
+    });
 
-    const { errors, currentCompanyCount, companyUsageLimit } =
+    res.json({ data: formatVerifyCouponResponse(result) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+function formatVerifyCouponResponse(result) {
+  return {
+    valid: result.valid,
+    discount: result.discount,
+    coupon: result.coupon,
+    errors: result.errors,
+    companyUsageCount: result.companyUsageCount,
+    companyUsageLimit: result.companyUsageLimit,
+    instituteUsageCount: result.companyUsageCount,
+    instituteUsageLimit: result.companyUsageLimit,
+  };
+}
+
+async function verifyCouponWithDetails({
+  code,
+  purchaseAmount,
+  companyId,
+  membershipPlanId,
+  billingPeriod,
+}) {
+  const errors = {};
+
+  try {
+    const coupon = await findCouponByCode(code);
+    const { errors: checkErrors, currentCompanyCount, companyUsageLimit } =
       runVerificationChecks(coupon, {
         purchaseAmount,
         companyId,
@@ -434,35 +508,40 @@ const verifyCoupon = async (req, res, next) => {
         billingPeriod,
       });
 
-    if (Object.keys(errors).length > 0) {
-      return res.json({
-        data: {
-          valid: false,
-          discount: 0,
-          coupon: null,
-          errors,
-          companyUsageCount: currentCompanyCount,
-          companyUsageLimit,
-        },
-      });
+    if (Object.keys(checkErrors).length > 0) {
+      return {
+        valid: false,
+        discount: 0,
+        coupon: null,
+        errors: checkErrors,
+        companyUsageCount: currentCompanyCount,
+        companyUsageLimit,
+      };
     }
 
     const discount = calculateDiscount(coupon, purchaseAmount);
 
-    res.json({
-      data: {
-        valid: true,
-        discount,
-        coupon: toResponse(coupon),
-        errors: {},
-        companyUsageCount: currentCompanyCount,
-        companyUsageLimit,
-      },
-    });
+    return {
+      valid: true,
+      discount,
+      coupon: toResponse(coupon),
+      errors: {},
+      companyUsageCount: currentCompanyCount,
+      companyUsageLimit,
+    };
   } catch (error) {
-    next(error);
+    console.error('Error verifying coupon with details:', error);
+    errors.system = ['An error occurred while verifying the coupon.'];
+    return {
+      valid: false,
+      discount: 0,
+      coupon: null,
+      errors,
+      companyUsageCount: 0,
+      companyUsageLimit: null,
+    };
   }
-};
+}
 
 async function applyCoupon(code, companyId) {
   try {
@@ -511,6 +590,7 @@ module.exports = {
   updateCoupon,
   removeCoupon,
   verifyCoupon,
+  verifyCouponWithDetails,
   applyCoupon,
   findCouponByCode,
   calculateDiscount,

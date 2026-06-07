@@ -2,7 +2,16 @@ const { z } = require('zod');
 
 const DiscountType = z.enum(['PERCENTAGE', 'FIXED']);
 const CouponStatus = z.enum(['ACTIVE', 'INACTIVE', 'EXPIRED']);
-const BillingPeriod = z.enum(['MONTHLY', 'THREE_MONTH', 'SIX_MONTH', 'ANNUAL']);
+const BillingPeriod = z.enum([
+  'monthly',
+  'threeMonth',
+  'sixMonth',
+  'annual',
+  'MONTHLY',
+  'THREE_MONTH',
+  'SIX_MONTH',
+  'ANNUAL',
+]);
 
 const couponFieldsSchema = z.object({
   code: z.string().trim().min(1).max(50),

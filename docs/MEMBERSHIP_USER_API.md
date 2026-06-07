@@ -20,8 +20,8 @@ Authorization: Bearer <token>
 
 Obtain a token from **`POST /api/auth/login`**.
 
-| Middleware | Access |
-|------------|--------|
+| Middleware         | Access                                               |
+| ------------------ | ---------------------------------------------------- |
 | `authenticateUser` | Any valid JWT (`src/middleware/authenticateUser.js`) |
 
 ### Company ID requirement
@@ -46,7 +46,7 @@ Both routes read **`companyId`** from the JWT (`req.user.companyId`). Users **wi
 
 Self-service and registration trials use **`MEMBERSHIP_TRIAL_DAYS = 14`** (`src/utils/membershipDates.js`):
 
-- `POST /membership/me/start-trial` → 14-day window
+- `POST /membership/me/start-trial` → 14-day window (**once per company** — see [MEMBERSHIP_TRIAL.md](./MEMBERSHIP_TRIAL.md))
 - `POST /company/registerCompany` → initial trial is also 14 days (server-set)
 
 ---
@@ -55,28 +55,28 @@ Self-service and registration trials use **`MEMBERSHIP_TRIAL_DAYS = 14`** (`src/
 
 Stored on the **`Company`** row:
 
-| Field | Description |
-|-------|-------------|
-| `membership` | `TRIAL` \| `TRIAL_EXPIRED` \| `EXPIRED` \| `ACTIVE` |
-| `membershipStartDate` | Trial or paid period start |
-| `membershipEndDate` | Trial end (`TRIAL`) or paid expiry (`ACTIVE`) |
+| Field                 | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `membership`          | `TRIAL` \| `TRIAL_EXPIRED` \| `EXPIRED` \| `ACTIVE` |
+| `membershipStartDate` | Trial or paid period start                          |
+| `membershipEndDate`   | Trial end (`TRIAL`) or paid expiry (`ACTIVE`)       |
 
 ### Access flags (computed)
 
-| Flag | Meaning |
-|------|---------|
-| `hasAccess` | `true` if active trial **or** active paid membership |
-| `isInTrial` | `membership === TRIAL` and `membershipEndDate` is in the future |
-| `requiresPurchase` | `!hasAccess` — show paywall / upgrade UI |
+| Flag               | Meaning                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `hasAccess`        | `true` if active trial **or** active paid membership            |
+| `isInTrial`        | `membership === TRIAL` and `membershipEndDate` is in the future |
+| `requiresPurchase` | `!hasAccess` — show paywall / upgrade UI                        |
 
 ---
 
 ## Routes overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/membership/me/status` | Current company membership / trial state |
-| POST | `/membership/me/start-trial` | Start (or acknowledge) a 14-day trial |
+| Method | Path                         | Description                              |
+| ------ | ---------------------------- | ---------------------------------------- |
+| GET    | `/membership/me/status`      | Current company membership / trial state |
+| POST   | `/membership/me/start-trial` | Start (or acknowledge) a 14-day trial    |
 
 ---
 
@@ -104,27 +104,27 @@ No body. JWT required.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `membershipStatus` | Same as `Company.membership` |
-| `membershipPlanId` | Reserved; currently always `null` |
-| `membershipName` | Reserved; currently always `null` |
+| Field                  | Description                                        |
+| ---------------------- | -------------------------------------------------- |
+| `membershipStatus`     | Same as `Company.membership`                       |
+| `membershipPlanId`     | Reserved; currently always `null`                  |
+| `membershipName`       | Reserved; currently always `null`                  |
 | `membershipExpiryDate` | End date when status is `ACTIVE`; otherwise `null` |
-| `trialEndsAt` | End date when status is `TRIAL`; otherwise `null` |
-| `membershipStartDate` | Period start |
-| `hasAccess` | See table above |
-| `isInTrial` | See table above |
-| `requiresPurchase` | See table above |
+| `trialEndsAt`          | End date when status is `TRIAL`; otherwise `null`  |
+| `membershipStartDate`  | Period start                                       |
+| `hasAccess`            | See table above                                    |
+| `isInTrial`            | See table above                                    |
+| `requiresPurchase`     | See table above                                    |
 
 Date fields are ISO `DateTime` values from the database (JSON serialization may vary by client).
 
 ### Errors
 
-| Status | When |
-|--------|------|
-| `400` | No `companyId` on token |
-| `401` | Missing / invalid token |
-| `404` | Company not found |
+| Status | When                    |
+| ------ | ----------------------- |
+| `400`  | No `companyId` on token |
+| `401`  | Missing / invalid token |
+| `404`  | Company not found       |
 
 ---
 
@@ -147,7 +147,8 @@ Starts a **14-day** trial for the token’s company.
 }
 ```
 
-3. Otherwise → sets `membership` to `TRIAL`, `membershipStartDate` to now, `membershipEndDate` to now + 14 days.
+3. If the company has **already used** its trial → **`400`** — full rules in [MEMBERSHIP_TRIAL.md](./MEMBERSHIP_TRIAL.md#post-apimembershipmestart-trial-decision-flow)
+4. Otherwise → sets `membership` to `TRIAL`, `membershipStartDate` to now, `membershipEndDate` to now + 14 days (only for companies that never received a trial window).
 
 ### Request
 
@@ -166,11 +167,11 @@ No body. JWT required.
 
 ### Errors
 
-| Status | When |
-|--------|------|
-| `400` | No `companyId`, or active paid membership |
-| `401` | Missing / invalid token |
-| `404` | Company not found |
+| Status | When                                      |
+| ------ | ----------------------------------------- |
+| `400`  | No `companyId`, active paid membership, or trial already used |
+| `401`  | Missing / invalid token                   |
+| `404`  | Company not found                         |
 
 ---
 
@@ -199,5 +200,8 @@ For up-to-date paywall logic, prefer **`GET /membership/me/status`** over stale 
 
 ## Related docs
 
+- One-time 14-day trial rule: [MEMBERSHIP_TRIAL.md](./MEMBERSHIP_TRIAL.md)
+- Global membership enforcement: [MEMBERSHIP_MIDDLEWARE.md](./MEMBERSHIP_MIDDLEWARE.md)
+- Membership purchase & Cashfree transactions: [MEMBERSHIP_TRANSACTIONS_API.md](./MEMBERSHIP_TRANSACTIONS_API.md)
 - Super admin plans & demo trial: [MEMBERSHIP_SUPER_ADMIN_API.md](./MEMBERSHIP_SUPER_ADMIN_API.md)
 - Login and general auth: [API.md](./API.md)
