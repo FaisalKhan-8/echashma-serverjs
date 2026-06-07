@@ -6,6 +6,7 @@ const rootRouter = require('./routes/index');
 const { errorHandler } = require('./middleware/errors');
 const cashfreeWebhookRawBody = require('./middleware/cashfreeWebhookRawBody');
 const { handleCashfreeWebhook } = require('./controllers/transaction.controller');
+const { startMembershipExpiryCron } = require('./cron/membershipExpiry.cron');
 const fs = require('fs');
 
 dotenv.config();
@@ -71,4 +72,5 @@ app.listen(process.env.PORT || 3001, '0.0.0.0', () => {
   console.log(
     `Server is running on port: http://0.0.0.0:${process.env.PORT || 3001}`
   );
+  startMembershipExpiryCron();
 });

@@ -23,6 +23,7 @@
     "lru-cache": "^11.1.0",
     "mssql": "^12.2.0",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
     "nodemailer": "^6.10.0",
     "pkg": "^5.7.0",
     "portfinder": "^1.0.32",
