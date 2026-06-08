@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /pricing
+Disallow: /dashboard/
+Disallow: /sign-in
+Disallow: /register
+Disallow: /verify/
+Disallow: /kyc
+Disallow: /payment/
+Disallow: /shared-customer-invoice/
+Disallow: /reset-password
+
+Sitemap: https://echasma.in/sitemap.xml
