@@ -21,6 +21,64 @@ function cacheKey(companyId) {
   return `company:${companyId}:whatsapp`
 }
 
+function sanitizeUser(user) {
+  if (!user) return user
+  const {
+    password,
+    password_visible,
+    resetPasswordToken,
+    resetPasswordExpires,
+    ...safe
+  } = user
+  return safe
+}
+
+function sanitizeCompany(company) {
+  if (!company) return company
+  const {
+    emailOtp,
+    emailOtpExpires,
+    phoneOtp,
+    phoneOtpExpires,
+    whatsappToken,
+    users,
+    ...safe
+  } = company
+  return {
+    ...safe,
+    users: Array.isArray(users) ? users.map(sanitizeUser) : users,
+  }
+}
+
+function buildCompanyListWhere(userRole, userCompanyId, searchTerm) {
+  const whereCondition = {}
+  const trimmedSearch = String(searchTerm || '').trim()
+
+  if (trimmedSearch) {
+    whereCondition.companyName = { contains: trimmedSearch }
+  }
+
+  switch (userRole) {
+    case 'SUPER_ADMIN':
+      break
+    case 'ADMIN':
+    case 'SUBADMIN':
+    case 'MANAGER':
+      if (!userCompanyId) {
+        throw new AppError(
+          `No company assigned to this ${userRole.toLowerCase()}`,
+          401
+        )
+      }
+      whereCondition.id = userCompanyId
+      break
+    default:
+      throw new AppError('Invalid user role', 401)
+  }
+
+  return whereCondition
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
@@ -376,77 +434,56 @@ const registerCompany = async (req, res, next) => {
 // get All Company
 async function getAllCompanies(req, res, next) {
   const { page = 1, pageSize = 10, searchTerm = '' } = req.query
-  const pageSizeNumber = parseInt(pageSize, 10) || 10
-  const pageNumber = parseInt(page, 10) || 1
+  const pageSizeNumber = Math.min(100, Math.max(1, parseInt(pageSize, 10) || 10))
+  const pageNumber = Math.max(1, parseInt(page, 10) || 1)
   const userRole = req.user.role
   const userCompanyId = req.user.companyId
 
   try {
-    let whereCondition = {
-      companyName: {
-        contains: searchTerm
-      }
-    }
-
-    switch (userRole) {
-      case 'SUPER_ADMIN':
-        break
-
-      case 'ADMIN':
-      case 'SUBADMIN':
-      case 'MANAGER':
-        if (!userCompanyId) {
-          throw new AppError(
-            `No company assigned to this ${userRole.toLowerCase()}`,
-            401
-          )
-        }
-        whereCondition = { ...whereCondition, id: userCompanyId }
-        break
-
-      default:
-        throw new AppError('Invalid user role', 401)
-    }
+    const whereCondition = buildCompanyListWhere(
+      userRole,
+      userCompanyId,
+      searchTerm
+    )
 
     const totalRecords = await db.company.count({ where: whereCondition })
 
     const companies = await db.company.findMany({
       where: whereCondition,
-      include: { users: true },
+      include: {
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+            role: true,
+            companyId: true,
+            uuid: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
+        membershipPlan: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { created_at: 'desc' },
       skip: (pageNumber - 1) * pageSizeNumber,
-      take: pageSizeNumber
+      take: pageSizeNumber,
     })
 
-    console.log(companies, 'companies')
-
-    if (companies.length === 0) {
-      throw new AppError('No companies found', 404)
-    }
-
     res.json({
-      companies,
+      companies: companies.map(sanitizeCompany),
       pagination: {
         page: pageNumber,
         pageSize: pageSizeNumber,
         totalRecords,
-        totalPages: Math.ceil(totalRecords / pageSizeNumber)
-      }
+        totalPages: Math.ceil(totalRecords / pageSizeNumber) || 0,
+      },
     })
   } catch (error) {
-    // Error handling middleware
-    if (error.isOperational) {
-      res.status(error.statusCode).json({
-        status: 'error',
-        message: error.message
-      })
-    } else {
-      console.error(error) // Log the error details for debugging
-      res.status(500).json({
-        status: 'error',
-        message: 'Internal Server Error'
-      })
-    }
-    next(error) // Pass the error to the next middleware
+    next(error)
   }
 }
 
@@ -484,10 +521,8 @@ async function getCompanyById(req, res, next) {
     }
 
     // Return the company and related data
-    return res.status(200).json({ company })
+    return res.status(200).json({ company: sanitizeCompany(company) })
   } catch (error) {
-    // Handle unexpected errors
-    console.error(error)
     next(error)
   }
 }
