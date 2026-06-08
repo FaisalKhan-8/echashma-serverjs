@@ -1,0 +1,22 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+IF COL_LENGTH('dbo.Company', 'aadhaarNo') IS NULL
+  ALTER TABLE [dbo].[Company] ADD [aadhaarNo] VARCHAR(20) NULL;
+
+IF COL_LENGTH('dbo.Company', 'panNo') IS NULL
+  ALTER TABLE [dbo].[Company] ADD [panNo] VARCHAR(20) NULL;
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH
