@@ -10,14 +10,24 @@ function escapeHtml(str) {
 }
 
 function frontendBaseUrl() {
-  return (process.env.FRONTEND_URL || 'https://echashma.com').replace(/\/$/, '')
+  return (process.env.FRONTEND_URL || 'https://echashma.in').replace(/\/$/, '')
 }
 
-function emailLayout({ preheader, bodyHtml, footerNote }) {
+function emailLayout({ preheader, bodyHtml, footerNote, footerTermsHtml }) {
   const baseUrl = frontendBaseUrl()
   const termsUrl = `${baseUrl}/terms-and-conditions`
   const privacyUrl = `${baseUrl}/privacy-policy`
   const year = new Date().getFullYear()
+  const termsBlock =
+    footerTermsHtml ||
+    `<p style="margin:0 0 12px 0;font-size:12px;line-height:1.6;color:#64748b;">
+      By verifying your company email, you confirm that you are an authorised representative of the registered business
+      and agree to E-chashma&apos;s
+      <a href="${termsUrl}" style="color:#0f766e;text-decoration:underline;">Terms &amp; Conditions</a>
+      and
+      <a href="${privacyUrl}" style="color:#0f766e;text-decoration:underline;">Privacy Policy</a>.
+      Do not share this OTP with anyone. E-chashma staff will never ask for your verification code.
+    </p>`
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -78,14 +88,7 @@ function emailLayout({ preheader, bodyHtml, footerNote }) {
                 <tr>
                   <td style="padding:20px 24px;">
                     <p style="margin:0 0 10px 0;font-size:13px;font-weight:600;color:#334155;letter-spacing:0.3px;">Terms &amp; Conditions</p>
-                    <p style="margin:0 0 12px 0;font-size:12px;line-height:1.6;color:#64748b;">
-                      By verifying your company email, you confirm that you are an authorised representative of the registered business
-                      and agree to E-chashma&apos;s
-                      <a href="${termsUrl}" style="color:#0f766e;text-decoration:underline;">Terms &amp; Conditions</a>
-                      and
-                      <a href="${privacyUrl}" style="color:#0f766e;text-decoration:underline;">Privacy Policy</a>.
-                      Do not share this OTP with anyone. E-chashma staff will never ask for your verification code.
-                    </p>
+                    ${termsBlock}
                     <p style="margin:0;font-size:11px;line-height:1.5;color:#94a3b8;">
                       ${footerNote}
                     </p>
@@ -211,5 +214,7 @@ function buildEmailVerificationOtpHtml({ otp, companyName, recipientEmail }) {
 }
 
 module.exports = {
-  buildEmailVerificationOtpHtml
+  emailLayout,
+  escapeHtml,
+  buildEmailVerificationOtpHtml,
 }

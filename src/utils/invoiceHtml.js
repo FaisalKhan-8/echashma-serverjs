@@ -1,8 +1,9 @@
 const { BILLING_PERIOD_LABELS } = require('./membershipTransactionConstants');
+const { emailLayout, escapeHtml } = require('./emailTemplates');
 
 const ORGANIZATION = {
   name: 'E-chashma',
-  email: process.env.EMAIL_USER || 'support@echashma.in',
+  email: 'support@echashma.in',
   mobile: '+91 98765 43210',
   address: 'India',
   website: process.env.FRONTEND_URL || 'https://echashma.in',
@@ -154,8 +155,173 @@ function generateInvoiceHTML({ transaction, membershipPlan, company }) {
 </html>`;
 }
 
+function buildMembershipInvoiceEmailHtml({
+  billingAddress,
+  membershipPlan,
+  company,
+  transaction,
+  priceBreakdown,
+  invoiceNumber,
+  hasPdfAttachment,
+}) {
+  const resolvedBreakdown =
+    priceBreakdown && Object.keys(priceBreakdown).length > 0
+      ? priceBreakdown
+      : transaction.priceBreakdown || {};
+  const customerName =
+    billingAddress.fullName ||
+    company?.contactPerson ||
+    company?.companyName ||
+    'Customer';
+  const safeName = escapeHtml(customerName);
+  const safePlanName = escapeHtml(membershipPlan.name);
+  const billingLabel =
+    BILLING_PERIOD_LABELS[transaction.billingPeriod] ||
+    escapeHtml(transaction.billingPeriod);
+  const totalFormatted = formatCurrency(resolvedBreakdown.totalAmount || 0);
+  const statusLower = String(transaction.transactionStatus || '').toLowerCase();
+  let statusBg = '#fffbeb';
+  let statusBorder = '#f59e0b';
+  let statusColor = '#92400e';
+  if (statusLower === 'success') {
+    statusBg = '#ecfdf5';
+    statusBorder = '#0f766e';
+    statusColor = '#065f46';
+  } else if (statusLower === 'failed') {
+    statusBg = '#fef2f2';
+    statusBorder = '#ef4444';
+    statusColor = '#991b1b';
+  }
+
+  const bodyHtml = `
+    <!-- Accent bar -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr>
+        <td style="height:4px;background:linear-gradient(90deg,#0f766e,#14b8a6,#2dd4bf);background-color:#0f766e;font-size:0;line-height:0;">&nbsp;</td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr>
+        <td class="content-padding" style="padding:36px 40px 32px 40px;">
+          <!-- Icon badge -->
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 20px auto;">
+            <tr>
+              <td align="center" style="width:56px;height:56px;background-color:#ecfdf5;border-radius:50%;font-size:26px;line-height:56px;text-align:center;">
+                &#128196;
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin:0 0 8px 0;font-size:24px;font-weight:700;color:#0f172a;text-align:center;line-height:1.3;">
+            Your membership invoice
+          </h1>
+          <p style="margin:0 0 28px 0;font-size:15px;line-height:1.6;color:#64748b;text-align:center;">
+            Hi <strong style="color:#334155;">${safeName}</strong>, thank you for your membership purchase on E-chashma.
+            ${hasPdfAttachment ? 'Your invoice is attached to this email.' : 'Your invoice details are below.'}
+          </p>
+          <!-- Invoice summary box -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;">
+            <tr>
+              <td align="center" style="background-color:#f0fdfa;border:2px dashed #99f6e4;border-radius:12px;padding:24px 16px;">
+                <p style="margin:0 0 6px 0;font-size:11px;font-weight:600;color:#0f766e;text-transform:uppercase;letter-spacing:1.5px;">
+                  Total amount
+                </p>
+                <p style="margin:0 0 10px 0;font-size:32px;font-weight:800;color:#0f766e;letter-spacing:0.5px;">
+                  ${totalFormatted}
+                </p>
+                <p style="margin:0;font-size:13px;color:#64748b;">
+                  Invoice <strong style="color:#334155;">${escapeHtml(invoiceNumber)}</strong>
+                </p>
+              </td>
+            </tr>
+          </table>
+          <!-- Status notice -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px 0;">
+            <tr>
+              <td style="background-color:${statusBg};border-left:4px solid ${statusBorder};border-radius:0 8px 8px 0;padding:14px 16px;">
+                <p style="margin:0;font-size:13px;line-height:1.5;color:${statusColor};">
+                  <strong>Status: ${escapeHtml(transaction.transactionStatus || 'Pending')}</strong>
+                  ${hasPdfAttachment ? ' — A PDF copy of your invoice is attached.' : ''}
+                </p>
+              </td>
+            </tr>
+          </table>
+          <!-- Invoice details -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+              <td style="padding:16px 0 0 0;border-top:1px solid #f1f5f9;">
+                <p style="margin:0 0 12px 0;font-size:13px;font-weight:600;color:#334155;">Invoice details</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+                  <tr>
+                    <td style="padding:16px 20px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                          <td style="padding:6px 0;font-size:13px;line-height:1.5;color:#64748b;">
+                            <span style="display:inline-block;width:22px;height:22px;background-color:#ecfdf5;color:#0f766e;border-radius:50%;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">1</span>
+                            <strong style="color:#334155;">Plan:</strong> ${safePlanName}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:13px;line-height:1.5;color:#64748b;">
+                            <span style="display:inline-block;width:22px;height:22px;background-color:#ecfdf5;color:#0f766e;border-radius:50%;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">2</span>
+                            <strong style="color:#334155;">Billing period:</strong> ${billingLabel}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:13px;line-height:1.5;color:#64748b;">
+                            <span style="display:inline-block;width:22px;height:22px;background-color:#ecfdf5;color:#0f766e;border-radius:50%;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">3</span>
+                            <strong style="color:#334155;">Subtotal:</strong> ${formatCurrency(resolvedBreakdown.subtotal || 0)}
+                          </td>
+                        </tr>
+                        ${
+                          transaction.couponCode
+                            ? `<tr>
+                          <td style="padding:6px 0;font-size:13px;line-height:1.5;color:#64748b;">
+                            <span style="display:inline-block;width:22px;height:22px;background-color:#ecfdf5;color:#0f766e;border-radius:50%;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">4</span>
+                            <strong style="color:#334155;">Coupon (${escapeHtml(transaction.couponCode)}):</strong>
+                            <span style="color:#059669;">- ${formatCurrency(resolvedBreakdown.couponDiscount || 0)}</span>
+                          </td>
+                        </tr>`
+                            : ''
+                        }
+                        <tr>
+                          <td style="padding:6px 0;font-size:13px;line-height:1.5;color:#64748b;">
+                            <span style="display:inline-block;width:22px;height:22px;background-color:#ecfdf5;color:#0f766e;border-radius:50%;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">${transaction.couponCode ? '5' : '4'}</span>
+                            <strong style="color:#334155;">GST:</strong> ${formatCurrency(resolvedBreakdown.gstAmount || 0)}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#94a3b8;text-align:center;">
+            Questions about your invoice? Contact us at
+            <a href="mailto:${escapeHtml(ORGANIZATION.email)}" style="color:#0f766e;text-decoration:underline;">${escapeHtml(ORGANIZATION.email)}</a>.
+          </p>
+        </td>
+      </tr>
+    </table>`;
+
+  return emailLayout({
+    preheader: `Your E-chashma membership invoice ${invoiceNumber} for ${membershipPlan.name} — ${totalFormatted}.`,
+    bodyHtml,
+    footerNote:
+      'This is an automated message regarding your membership purchase. Please do not reply to this email.',
+    footerTermsHtml: `<p style="margin:0 0 12px 0;font-size:12px;line-height:1.6;color:#64748b;">
+      This invoice confirms your E-chashma membership purchase and is subject to our
+      <a href="${(process.env.FRONTEND_URL || 'https://echashma.in').replace(/\/$/, '')}/terms-and-conditions" style="color:#0f766e;text-decoration:underline;">Terms &amp; Conditions</a>
+      and
+      <a href="${(process.env.FRONTEND_URL || 'https://echashma.in').replace(/\/$/, '')}/privacy-policy" style="color:#0f766e;text-decoration:underline;">Privacy Policy</a>.
+      Keep this email for your records. If you did not authorise this purchase, contact us immediately.
+    </p>`,
+  });
+}
+
 module.exports = {
   generateInvoiceHTML,
+  buildMembershipInvoiceEmailHtml,
   ORGANIZATION,
   formatCurrency,
 };

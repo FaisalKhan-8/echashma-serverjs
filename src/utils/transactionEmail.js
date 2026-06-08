@@ -1,5 +1,8 @@
 const nodemailer = require('nodemailer');
-const { ORGANIZATION } = require('./invoiceHtml');
+const {
+  ORGANIZATION,
+  buildMembershipInvoiceEmailHtml,
+} = require('./invoiceHtml');
 const { parseJsonField } = require('./membershipTransactionConstants');
 
 let transporter = null;
@@ -31,10 +34,15 @@ function escapeHtml(text) {
 }
 
 function toViewTransaction(row) {
+  if (!row) return row;
   return {
     ...row,
-    billingAddress: parseJsonField(row.billingAddressJson, {}),
-    priceBreakdown: parseJsonField(row.priceBreakdownJson, {}),
+    billingAddress:
+      row.billingAddress ||
+      parseJsonField(row.billingAddressJson, {}),
+    priceBreakdown:
+      row.priceBreakdown ||
+      parseJsonField(row.priceBreakdownJson, {}),
   };
 }
 
@@ -64,17 +72,15 @@ async function sendMembershipInvoiceEmail({
     to: billingAddress.email,
     cc: company.email,
     subject: `Membership Invoice - ${invoiceNumber} - ${membershipPlan.name}`,
-    html: `
-      <p>Dear ${escapeHtml(billingAddress.fullName)},</p>
-      <p>Thank you for your membership purchase. Please find your invoice attached to this email.</p>
-      <ul>
-        <li><strong>Invoice Number:</strong> ${invoiceNumber}</li>
-        <li><strong>Plan:</strong> ${escapeHtml(membershipPlan.name)}</li>
-        <li><strong>Billing Period:</strong> ${escapeHtml(viewTx.billingPeriod)}</li>
-        <li><strong>Total:</strong> ₹${Number(priceBreakdown.totalAmount || 0).toFixed(2)}</li>
-      </ul>
-      <p>If you have any questions, contact ${ORGANIZATION.email}.</p>
-    `,
+    html: buildMembershipInvoiceEmailHtml({
+      billingAddress,
+      membershipPlan,
+      company,
+      transaction: viewTx,
+      priceBreakdown,
+      invoiceNumber,
+      hasPdfAttachment: Boolean(pdfBuffer && pdfFileName),
+    }),
   };
 
   if (pdfBuffer && pdfFileName) {
