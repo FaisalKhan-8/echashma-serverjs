@@ -51,6 +51,67 @@ function effectiveUsageLimitForResponse(limit) {
   return isEnforcedUsageLimit(limit) ? Number(limit) : null;
 }
 
+function isCouponGloballyAvailable(coupon) {
+  if (!coupon || coupon.status !== COUPON_STATUS.ACTIVE || !coupon.isPublic) {
+    return false;
+  }
+  if (coupon.expiryDate && new Date(coupon.expiryDate) < new Date()) {
+    return false;
+  }
+  if (
+    isEnforcedUsageLimit(coupon.usageLimit) &&
+    coupon.usedCount >= coupon.usageLimit
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function toPublicResponse(coupon) {
+  const planIds =
+    coupon.membershipPlans?.map((p) => p.membershipPlanId) ?? [];
+  const billingPeriods = parseBillingPeriods(coupon.applicableBillingPeriods);
+
+  return {
+    id: coupon.id,
+    code: coupon.code,
+    description: coupon.description,
+    discountType: coupon.discountType,
+    discountValue: decimalToNumber(coupon.discountValue),
+    expiryDate: coupon.expiryDate ? coupon.expiryDate.toISOString() : null,
+    minPurchaseAmount: decimalToNumber(coupon.minPurchaseAmount),
+    maxDiscountAmount: decimalToNumber(coupon.maxDiscountAmount),
+    applicableMembershipPlans: planIds.length > 0 ? planIds : null,
+    applicableBillingPeriods: billingPeriods,
+  };
+}
+
+function couponMatchesPublicFilters(coupon, { membershipPlanId, billingPeriod }) {
+  if (membershipPlanId != null) {
+    const planIds =
+      coupon.membershipPlans?.map((p) => p.membershipPlanId) ?? [];
+    if (planIds.length > 0 && !planIds.includes(Number(membershipPlanId))) {
+      return false;
+    }
+  }
+
+  if (billingPeriod) {
+    const applicablePeriods = normalizeBillingPeriodList(
+      parseBillingPeriods(coupon.applicableBillingPeriods)
+    );
+    const normalizedPeriod = normalizeBillingPeriod(billingPeriod);
+    if (
+      applicablePeriods?.length > 0 &&
+      normalizedPeriod &&
+      !applicablePeriods.includes(normalizedPeriod)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function toResponse(coupon) {
   const planIds =
     coupon.membershipPlans?.map((p) => p.membershipPlanId) ?? [];
@@ -290,6 +351,68 @@ const createCoupon = async (req, res, next) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return next(new AppError('Coupon with the same code already exists', 409));
     }
+    next(error);
+  }
+};
+
+const findPublicCoupons = async (req, res, next) => {
+  try {
+    const membershipPlanId = req.query.membershipPlanId
+      ? parseInt(req.query.membershipPlanId, 10)
+      : null;
+    const billingPeriod = req.query.billingPeriod || null;
+
+    const coupons = await db.coupon.findMany({
+      where: {
+        isPublic: true,
+        status: COUPON_STATUS.ACTIVE,
+        OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }],
+      },
+      include: {
+        membershipPlans: { select: { membershipPlanId: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const data = coupons
+      .filter(isCouponGloballyAvailable)
+      .filter((coupon) =>
+        couponMatchesPublicFilters(coupon, {
+          membershipPlanId:
+            membershipPlanId != null && !Number.isNaN(membershipPlanId)
+              ? membershipPlanId
+              : null,
+          billingPeriod,
+        })
+      )
+      .map(toPublicResponse);
+
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const findOnePublicCoupon = async (req, res, next) => {
+  const couponId = parseInt(req.params.id, 10);
+  if (Number.isNaN(couponId)) {
+    return next(new AppError('Invalid coupon id', 400));
+  }
+
+  try {
+    const coupon = await db.coupon.findUnique({
+      where: { id: couponId },
+      include: {
+        membershipPlans: { select: { membershipPlanId: true } },
+      },
+    });
+
+    if (!coupon || !isCouponGloballyAvailable(coupon)) {
+      throw new AppError('Coupon not found', 404);
+    }
+
+    res.json(toPublicResponse(coupon));
+  } catch (error) {
     next(error);
   }
 };
@@ -585,6 +708,8 @@ async function applyCoupon(code, companyId) {
 
 module.exports = {
   createCoupon,
+  findPublicCoupons,
+  findOnePublicCoupon,
   findAllCoupons,
   findOneCoupon,
   updateCoupon,

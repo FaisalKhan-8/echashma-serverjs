@@ -10,6 +10,22 @@ https://<your-host>/api/transactions/webhook/cashfree
 
 Or set `PUBLIC_API_BASE_URL` in `.env` — the purchase flow sends this as `order_meta.notify_url`.
 
+### Local testing with ngrok
+
+1. Add your ngrok authtoken to `.env`:
+
+   ```text
+   NGROK_AUTH_TOKEN=<your-token>
+   ```
+
+2. Start the API (`npm run dev`) in one terminal, then the tunnel in another:
+
+   ```bash
+   npm run tunnel
+   ```
+
+3. Copy the printed `PUBLIC_API_BASE_URL` into `.env` (or use the same URL in the Cashfree dashboard).
+
 ### Headers (from Cashfree)
 
 | Header                | Purpose             |

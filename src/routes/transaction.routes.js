@@ -4,6 +4,7 @@ const validateRequest = require('../middleware/validateRequests');
 const { purchaseMembershipSchema } = require('../schema/transaction');
 const {
   purchaseMembership,
+  pollPaymentStatus,
   findAll,
   findOne,
   downloadInvoice,
@@ -19,6 +20,11 @@ transactionRoutes.post(
 );
 
 transactionRoutes.get('/', authenticateUser, findAll);
+transactionRoutes.get(
+  '/payment-status/:tx',
+  authenticateUser,
+  pollPaymentStatus
+);
 transactionRoutes.get('/:id/invoice', authenticateUser, downloadInvoice);
 transactionRoutes.get('/:id', authenticateUser, findOne);
 

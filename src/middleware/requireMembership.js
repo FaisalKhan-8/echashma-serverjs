@@ -15,6 +15,7 @@ const EXEMPT_EXACT_PATHS = new Set([
 const EXEMPT_PREFIXES = [
   '/auth',
   '/membership-plans',
+  '/coupons/public',
   '/company/verification/',
   '/transactions',
 ];

@@ -5,6 +5,8 @@ const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 const {
   createOrder,
+  getOrder,
+  getOrderPayments,
   verifyWebhookSignature,
   normalizeCustomerPhone,
   getClientId,
@@ -17,6 +19,8 @@ const {
   PAYMENT_METHOD,
   addBillingPeriod,
   getBasePriceForPeriod,
+  parseJsonField,
+  getInvoiceUrl,
   serializeTransaction,
 } = require('../utils/membershipTransactionConstants');
 const {
@@ -102,6 +106,69 @@ async function updateCompanyMembership(
   });
 }
 
+async function generateAndSaveMembershipInvoice(transactionRow, options = {}) {
+  const { skipIfExists = true } = options;
+
+  if (transactionRow.transactionStatus !== TRANSACTION_STATUS.SUCCESS) {
+    return { url: null, pdfBuffer: null, fileName: null };
+  }
+
+  if (skipIfExists && transactionRow.invoicePdfUrl) {
+    return {
+      url: transactionRow.invoicePdfUrl,
+      pdfBuffer: null,
+      fileName: null,
+    };
+  }
+
+  const membershipPlan = await db.membershipPlan.findUnique({
+    where: { id: transactionRow.membershipPlanId },
+  });
+  const company = await db.company.findUnique({
+    where: { id: transactionRow.companyId },
+  });
+  if (!membershipPlan || !company) {
+    return { url: null, pdfBuffer: null, fileName: null };
+  }
+
+  const viewTx = serializeTransaction(transactionRow);
+  const invoiceData = { transaction: viewTx, membershipPlan, company };
+  const invoiceNumber = `ECH-${String(transactionRow.id).padStart(8, '0').slice(-8).toUpperCase()}`;
+  const fileName = `Invoice-${invoiceNumber}.pdf`;
+
+  try {
+    const html = generateInvoiceHTML(invoiceData);
+    const pdfBuffer = await generateInvoicePDF(html);
+    const upload = await uploadPublicObject({
+      body: pdfBuffer,
+      folder: `invoices/${transactionRow.companyId}`,
+      originalName: fileName,
+      contentType: 'application/pdf',
+    });
+    await db.membershipTransaction.update({
+      where: { id: transactionRow.id },
+      data: { invoicePdfUrl: upload.url },
+    });
+    return { url: upload.url, pdfBuffer, fileName };
+  } catch (error) {
+    console.error('Failed to generate/upload invoice PDF:', error.message);
+    return { url: null, pdfBuffer: null, fileName: null };
+  }
+}
+
+async function ensureInvoiceSaved(row) {
+  if (
+    !row ||
+    row.transactionStatus !== TRANSACTION_STATUS.SUCCESS ||
+    row.invoicePdfUrl
+  ) {
+    return row;
+  }
+
+  await generateAndSaveMembershipInvoice(row);
+  return db.membershipTransaction.findUnique({ where: { id: row.id } });
+}
+
 async function sendSuccessSideEffects(transactionRow) {
   const membershipPlan = await db.membershipPlan.findUnique({
     where: { id: transactionRow.membershipPlanId },
@@ -113,26 +180,9 @@ async function sendSuccessSideEffects(transactionRow) {
 
   const viewTx = serializeTransaction(transactionRow);
   const invoiceData = { transaction: viewTx, membershipPlan, company };
-  const invoiceNumber = `ECH-${String(transactionRow.id).padStart(8, '0').slice(-8).toUpperCase()}`;
-  const fileName = `Invoice-${invoiceNumber}.pdf`;
-
-  let pdfBuffer = null;
-  try {
-    const html = generateInvoiceHTML(invoiceData);
-    pdfBuffer = await generateInvoicePDF(html);
-    const upload = await uploadPublicObject({
-      body: pdfBuffer,
-      folder: `invoices/${transactionRow.companyId}`,
-      originalName: fileName,
-      contentType: 'application/pdf',
-    });
-    await db.membershipTransaction.update({
-      where: { id: transactionRow.id },
-      data: { invoicePdfUrl: upload.url },
-    });
-  } catch (error) {
-    console.error('Failed to generate/upload invoice PDF:', error.message);
-  }
+  const { pdfBuffer, fileName } = await generateAndSaveMembershipInvoice(
+    transactionRow
+  );
 
   try {
     await sendMembershipInvoiceEmail({
@@ -186,7 +236,7 @@ async function confirmPayment(transactionId, cfPaymentId) {
   }
 
   await sendSuccessSideEffects(saved);
-  return saved;
+  return db.membershipTransaction.findUnique({ where: { id: transactionId } });
 }
 
 async function failTransaction(transaction, reason) {
@@ -206,6 +256,142 @@ async function failTransaction(transaction, reason) {
     console.error('Failed to send failure email:', error.message);
   }
   return saved;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function buildTransactionLookup(tx) {
+  const value = String(tx || '').trim();
+  if (!value) return null;
+
+  const numericId = parseInt(value, 10);
+  if (!Number.isNaN(numericId) && String(numericId) === value) {
+    return { id: numericId };
+  }
+
+  if (UUID_RE.test(value)) {
+    return { uuid: value };
+  }
+
+  if (value.startsWith('ech_')) {
+    return { cashfreeOrderId: value };
+  }
+
+  return null;
+}
+
+function normalizeCashfreePayments(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.payments)) return payload.payments;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function getLatestPayment(payments) {
+  if (!payments.length) return null;
+  return payments[payments.length - 1];
+}
+
+async function syncTransactionFromCashfree(transaction) {
+  if (
+    transaction.transactionStatus !== TRANSACTION_STATUS.PENDING ||
+    transaction.paymentGateway !== PAYMENT_GATEWAY.CASHFREE ||
+    !transaction.cashfreeOrderId
+  ) {
+    return transaction;
+  }
+
+  try {
+    const order = await getOrder(transaction.cashfreeOrderId);
+    const orderStatus = String(order?.order_status || '').toUpperCase();
+
+    if (orderStatus === 'PAID') {
+      const payments = normalizeCashfreePayments(
+        await getOrderPayments(transaction.cashfreeOrderId)
+      );
+      const latestPayment = getLatestPayment(payments);
+      const cfPaymentId =
+        latestPayment?.cf_payment_id != null
+          ? String(latestPayment.cf_payment_id)
+          : undefined;
+      return confirmPayment(transaction.id, cfPaymentId);
+    }
+
+    if (orderStatus === 'EXPIRED') {
+      return failTransaction(transaction, 'Payment order expired');
+    }
+
+    if (orderStatus === 'TERMINATED') {
+      return failTransaction(transaction, 'Payment order was terminated');
+    }
+
+    const payments = normalizeCashfreePayments(
+      await getOrderPayments(transaction.cashfreeOrderId)
+    );
+    const latestPayment = getLatestPayment(payments);
+    const paymentStatus = String(latestPayment?.payment_status || '').toUpperCase();
+
+    if (paymentStatus === 'SUCCESS') {
+      const cfPaymentId =
+        latestPayment?.cf_payment_id != null
+          ? String(latestPayment.cf_payment_id)
+          : undefined;
+      return confirmPayment(transaction.id, cfPaymentId);
+    }
+
+    if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
+      const reason =
+        latestPayment?.payment_message ||
+        latestPayment?.error_details?.error_description ||
+        latestPayment?.error_details?.error_reason ||
+        'Cashfree payment failed';
+      return failTransaction(transaction, reason);
+    }
+  } catch (error) {
+    console.error(
+      `[Payment poll] Cashfree sync failed for tx ${transaction.id}:`,
+      error.message
+    );
+  }
+
+  return transaction;
+}
+
+function buildPaymentPollResponse(row) {
+  const status = row.transactionStatus;
+  const success = status === TRANSACTION_STATUS.SUCCESS;
+  const failed =
+    status === TRANSACTION_STATUS.FAILED ||
+    status === TRANSACTION_STATUS.CANCELLED;
+  const pending = status === TRANSACTION_STATUS.PENDING;
+  const completed = success || failed;
+
+  return {
+    transactionId: row.id,
+    transactionUuid: row.uuid,
+    transactionStatus: status,
+    completed,
+    success,
+    failed,
+    pending,
+    membershipPlan: row.membershipPlan
+      ? {
+          id: row.membershipPlan.id,
+          name: row.membershipPlan.name,
+        }
+      : undefined,
+    billingPeriod: row.billingPeriod,
+    priceBreakdown: parseJsonField(row.priceBreakdownJson, {}),
+    couponCode: row.couponCode,
+    failureReason: row.failureReason,
+    cashfreeOrderId: row.cashfreeOrderId,
+    invoicePdfUrl: row.invoicePdfUrl || null,
+    invoiceUrl: getInvoiceUrl(row),
+    subscriptionStartDate: row.subscriptionStartDate,
+    subscriptionEndDate: row.subscriptionEndDate,
+    nextBillingDate: row.nextBillingDate,
+  };
 }
 
 const purchaseMembership = async (req, res, next) => {
@@ -432,6 +618,8 @@ const purchaseMembership = async (req, res, next) => {
       nextBillingDate: saved.nextBillingDate,
       successUrl,
       failureUrl,
+      invoicePdfUrl: null,
+      invoiceUrl: null,
     });
   } catch (error) {
     next(error);
@@ -474,6 +662,45 @@ const findAll = async (req, res, next) => {
   }
 };
 
+const pollPaymentStatus = async (req, res, next) => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId === null) return;
+
+  const lookup = buildTransactionLookup(req.params.tx);
+  if (!lookup) {
+    return next(new AppError('Invalid transaction reference', 400));
+  }
+
+  try {
+    let row = await db.membershipTransaction.findFirst({
+      where: { ...lookup, companyId },
+      include: {
+        membershipPlan: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!row) {
+      throw new AppError('Transaction not found', 404);
+    }
+
+    row = await syncTransactionFromCashfree(row);
+
+    if (row.transactionStatus !== TRANSACTION_STATUS.PENDING) {
+      row = await ensureInvoiceSaved(row);
+      row = await db.membershipTransaction.findFirst({
+        where: { id: row.id, companyId },
+        include: {
+          membershipPlan: { select: { id: true, name: true } },
+        },
+      });
+    }
+
+    res.json(buildPaymentPollResponse(row));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const findOne = async (req, res, next) => {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
@@ -502,7 +729,25 @@ const findOne = async (req, res, next) => {
     if (!row) {
       throw new AppError('Transaction not found', 404);
     }
-    res.json(serializeTransaction(row));
+
+    const withInvoice = await ensureInvoiceSaved(row);
+    const refreshed = await db.membershipTransaction.findFirst({
+      where: { id: withInvoice.id, companyId },
+      include: {
+        membershipPlan: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            monthlyPrice: true,
+            annualPrice: true,
+          },
+        },
+        company: { select: { id: true, companyName: true, email: true } },
+      },
+    });
+
+    res.json(serializeTransaction(refreshed));
   } catch (error) {
     next(error);
   }
@@ -526,24 +771,25 @@ const downloadInvoice = async (req, res, next) => {
       throw new AppError('Transaction not found', 404);
     }
 
-    if (row.invoicePdfUrl) {
-      return res.redirect(row.invoicePdfUrl);
+    const saved = await ensureInvoiceSaved(row);
+    if (saved?.invoicePdfUrl) {
+      return res.redirect(saved.invoicePdfUrl);
     }
 
-    const viewTx = serializeTransaction(row);
-    const html = generateInvoiceHTML({
-      transaction: viewTx,
-      membershipPlan: row.membershipPlan,
-      company: row.company,
+    const { pdfBuffer } = await generateAndSaveMembershipInvoice(row, {
+      skipIfExists: true,
     });
-    const pdfBuffer = await generateInvoicePDF(html);
-    const invoiceNumber = `ECH-${String(row.id).padStart(8, '0').slice(-8).toUpperCase()}`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="Invoice-${invoiceNumber}.pdf"`
-    );
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      const invoiceNumber = `ECH-${String(row.id).padStart(8, '0').slice(-8).toUpperCase()}`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Invoice-${invoiceNumber}.pdf"`
+      );
+      return res.send(pdfBuffer);
+    }
+
+    throw new AppError('Invoice is not available for this transaction', 404);
   } catch (error) {
     next(error);
   }
@@ -663,6 +909,7 @@ const handleCashfreeWebhook = async (req, res) => {
 
 module.exports = {
   purchaseMembership,
+  pollPaymentStatus,
   findAll,
   findOne,
   downloadInvoice,

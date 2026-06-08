@@ -30,6 +30,79 @@ function getClientId() {
   return getCashfreeClientId();
 }
 
+function getCashfreeCredentials() {
+  const clientId = getCashfreeClientId();
+  const clientSecret = getCashfreeClientSecret();
+  if (!clientId || !clientSecret) {
+    throw new AppError(
+      'Cashfree is not configured. Set CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET in .env and restart the server.',
+      500
+    );
+  }
+  return { clientId, clientSecret };
+}
+
+function getCashfreeHeaders(clientId, clientSecret, withJson = false) {
+  return {
+    ...(withJson ? { 'Content-Type': 'application/json' } : {}),
+    'x-api-version': CASHFREE_API_VERSION,
+    'x-client-id': clientId,
+    'x-client-secret': clientSecret,
+  };
+}
+
+async function cashfreeRequest(path, options = {}) {
+  const { clientId, clientSecret } = getCashfreeCredentials();
+  const url = `${getBaseUrl()}${path}`;
+  const headers = getCashfreeHeaders(clientId, clientSecret, options.method === 'POST');
+  const maxAttempts = 3;
+  let lastNetworkError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers: { ...headers, ...(options.headers || {}) },
+        body: options.body,
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const msg =
+          data?.message ||
+          data?.error?.message ||
+          JSON.stringify(data) ||
+          res.statusText;
+        throw new AppError(`Cashfree request failed: ${msg}`, 500);
+      }
+
+      return data;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      lastNetworkError = error;
+      const cause = error.cause?.code || error.cause?.message || error.cause;
+      const detail = cause ? ` (${cause})` : '';
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!isLastAttempt) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+        continue;
+      }
+
+      throw new AppError(
+        `Cashfree request failed: could not reach ${getBaseUrl()}${detail}. Check your internet connection and DNS, then retry.`,
+        500
+      );
+    }
+  }
+
+  throw lastNetworkError;
+}
+
 function normalizeCustomerPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length >= 10) {
@@ -41,16 +114,15 @@ function normalizeCustomerPhone(phone) {
   );
 }
 
-async function createOrder(params) {
-  const clientId = getCashfreeClientId();
-  const clientSecret = getCashfreeClientSecret();
-  if (!clientId || !clientSecret) {
-    throw new AppError(
-      'Cashfree is not configured. Set CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET in .env and restart the server.',
-      500
-    );
-  }
+async function getOrder(orderId) {
+  return cashfreeRequest(`/orders/${encodeURIComponent(orderId)}`);
+}
 
+async function getOrderPayments(orderId) {
+  return cashfreeRequest(`/orders/${encodeURIComponent(orderId)}/payments`);
+}
+
+async function createOrder(params) {
   const amount = Number(Number(params.orderAmount).toFixed(2));
   if (amount < 1) {
     throw new AppError('Order amount must be at least 1 INR for Cashfree', 400);
@@ -76,30 +148,10 @@ async function createOrder(params) {
     body.order_note = params.orderNote.slice(0, 200);
   }
 
-  const url = `${getBaseUrl()}/orders`;
-  const res = await fetch(url, {
+  return cashfreeRequest('/orders', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-version': CASHFREE_API_VERSION,
-      'x-client-id': clientId,
-      'x-client-secret': clientSecret,
-    },
     body: JSON.stringify(body),
   });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const msg =
-      data?.message ||
-      data?.error?.message ||
-      JSON.stringify(data) ||
-      res.statusText;
-    throw new AppError(`Cashfree create order failed: ${msg}`, 500);
-  }
-
-  return data;
 }
 
 function verifyWebhookSignature(signatureHeader, rawBody, timestampHeader) {
@@ -155,6 +207,8 @@ function getCashfreePaymentFailedMessageFromWebhookData(data) {
 
 module.exports = {
   createOrder,
+  getOrder,
+  getOrderPayments,
   verifyWebhookSignature,
   normalizeCustomerPhone,
   getClientId,

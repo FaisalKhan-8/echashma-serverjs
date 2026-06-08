@@ -9,6 +9,8 @@ const {
 } = require('../schema/coupon');
 const {
   createCoupon,
+  findPublicCoupons,
+  findOnePublicCoupon,
   findAllCoupons,
   findOneCoupon,
   updateCoupon,
@@ -17,6 +19,9 @@ const {
 } = require('../controllers/coupon.controller');
 
 const couponRoutes = Router();
+
+couponRoutes.get('/public', findPublicCoupons);
+couponRoutes.get('/public/:id', findOnePublicCoupon);
 
 couponRoutes.post(
   '/verify',

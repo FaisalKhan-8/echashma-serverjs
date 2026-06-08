@@ -74,6 +74,22 @@ function parseJsonField(raw, fallback = null) {
   }
 }
 
+function getInvoiceApiPath(transactionId) {
+  return `/api/transactions/${transactionId}/invoice`;
+}
+
+function getInvoiceUrl(row) {
+  if (!row || row.transactionStatus !== TRANSACTION_STATUS.SUCCESS) {
+    return null;
+  }
+  if (row.invoicePdfUrl) {
+    return row.invoicePdfUrl;
+  }
+  const publicBase = (process.env.PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+  const apiPath = getInvoiceApiPath(row.id);
+  return publicBase ? `${publicBase}${apiPath}` : apiPath;
+}
+
 function serializeTransaction(row) {
   if (!row) return null;
   return {
@@ -99,7 +115,8 @@ function serializeTransaction(row) {
     subscriptionStartDate: row.subscriptionStartDate,
     subscriptionEndDate: row.subscriptionEndDate,
     nextBillingDate: row.nextBillingDate,
-    invoicePdfUrl: row.invoicePdfUrl,
+    invoicePdfUrl: row.invoicePdfUrl || null,
+    invoiceUrl: getInvoiceUrl(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     membershipPlan: row.membershipPlan
@@ -121,5 +138,7 @@ module.exports = {
   addBillingPeriod,
   getBasePriceForPeriod,
   parseJsonField,
+  getInvoiceUrl,
+  getInvoiceApiPath,
   serializeTransaction,
 };

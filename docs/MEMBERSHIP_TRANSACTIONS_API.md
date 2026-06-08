@@ -71,6 +71,7 @@ Source: `src/utils/membershipTransactionConstants.js`.
 | ------ | ---- | ----------- |
 | POST | `/transactions/purchase-membership` | Start a membership purchase (Cashfree checkout) |
 | GET | `/transactions` | List transactions for the token’s company |
+| GET | `/transactions/payment-status/:tx` | Poll payment success/failure after checkout |
 | GET | `/transactions/:id` | Get one transaction |
 | GET | `/transactions/:id/invoice` | Download invoice PDF |
 | POST | `/transactions/webhook/cashfree` | Cashfree payment webhook (public) |
@@ -278,6 +279,7 @@ Paginated list for the authenticated company.
       "subscriptionStartDate": "...",
       "subscriptionEndDate": "...",
       "invoicePdfUrl": "https://...",
+      "invoiceUrl": "https://...",
       "createdAt": "...",
       "updatedAt": "...",
       "membershipPlan": {
@@ -295,6 +297,76 @@ Paginated list for the authenticated company.
   }
 }
 ```
+
+---
+
+## `GET /api/transactions/payment-status/:tx`
+
+Poll payment result after Cashfree checkout redirect. Use the `tx` query param from your success/failure URL (UUID or numeric transaction id).
+
+If the transaction is still `PENDING`, the server checks Cashfree order/payment status and updates the transaction before responding (useful when webhooks are delayed or unavailable locally).
+
+### Path parameter
+
+| Value | Example |
+| ----- | ------- |
+| Transaction UUID | `5ea8cf06-fd33-4134-8016-98d528284199` |
+| Numeric transaction id | `1003` |
+| Cashfree merchant order id | `ech_7c9e61814ab24b3dbe379b3a2a5f83c5` |
+
+### Success: `200`
+
+```json
+{
+  "transactionId": 1003,
+  "transactionUuid": "5ea8cf06-fd33-4134-8016-98d528284199",
+  "transactionStatus": "SUCCESS",
+  "completed": true,
+  "success": true,
+  "failed": false,
+  "pending": false,
+  "membershipPlan": { "id": 3, "name": "Enterprise" },
+  "billingPeriod": "threeMonth",
+  "priceBreakdown": {
+    "basePrice": 6999,
+    "couponDiscount": 500,
+    "subtotal": 6499,
+    "gstAmount": 1169.82,
+    "totalAmount": 7668.82
+  },
+  "couponCode": "ECHASHMA500",
+  "failureReason": null,
+  "cashfreeOrderId": "ech_7c9e61814ab24b3dbe379b3a2a5f83c5",
+  "invoicePdfUrl": "https://echashma-bucket.s3.ap-south-1.amazonaws.com/invoices/12/Invoice-ECH-00001003.pdf",
+  "invoiceUrl": "https://echashma-bucket.s3.ap-south-1.amazonaws.com/invoices/12/Invoice-ECH-00001003.pdf",
+  "subscriptionStartDate": "2026-06-08T17:15:32.535Z",
+  "subscriptionEndDate": "2026-09-08T17:15:32.535Z",
+  "nextBillingDate": "2026-09-08T17:15:32.535Z"
+}
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `completed` | `true` when status is `SUCCESS` or `FAILED` |
+| `success` | `true` only when payment succeeded |
+| `failed` | `true` when payment failed or was cancelled |
+| `pending` | `true` while still waiting for payment confirmation |
+
+### Frontend polling example
+
+```text
+GET /api/transactions/payment-status/5ea8cf06-fd33-4134-8016-98d528284199
+Authorization: Bearer <token>
+```
+
+Poll every 2–3 seconds until `completed` is `true`, then show success or failure UI.
+
+### Errors
+
+| Status | When |
+| ------ | ---- |
+| `400` | Invalid `tx` reference or missing `companyId` |
+| `404` | Transaction not found for this company |
 
 ---
 
@@ -407,7 +479,7 @@ After `POST /transactions/purchase-membership` with `transactionStatus: PENDING`
 
 1. Load Cashfree SDK with `cashfreeClientId`.
 2. Open checkout with `cashfreePaymentSessionId`.
-3. Poll `GET /transactions/:id` or rely on redirect URLs until `transactionStatus` is `SUCCESS` or `FAILED`.
+3. Poll `GET /transactions/payment-status/:tx` until `completed` is `true` (preferred), or use `GET /transactions/:id`.
 
 Placeholders in URLs:
 

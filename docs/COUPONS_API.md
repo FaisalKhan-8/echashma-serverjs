@@ -12,6 +12,7 @@ Implementation: `src/controllers/coupon.controller.js`, `src/routes/coupon.route
 
 | Route | Auth |
 |-------|------|
+| `GET /coupons/public`, `GET /coupons/public/:id` | None (public) |
 | `POST /coupons/verify` | `authenticateUser` — JWT with `companyId` |
 | `GET`, `POST`, `PATCH`, `DELETE /coupons` | `authorizeAdmin` — `SUPER_ADMIN` only |
 
@@ -25,6 +26,8 @@ Authorization: Bearer <token>
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
+| GET | `/coupons/public` | Public | List active public coupons |
+| GET | `/coupons/public/:id` | Public | Get one active public coupon |
 | POST | `/coupons/verify` | User | Validate coupon and compute discount |
 | GET | `/coupons` | SUPER_ADMIN | List all coupons (newest first) |
 | GET | `/coupons/:id` | SUPER_ADMIN | Get one coupon |
@@ -66,6 +69,50 @@ Authorization: Bearer <token>
 | `status` | string | |
 | `createdAt` | string | |
 | `updatedAt` | string | |
+
+---
+
+## `GET /coupons/public`
+
+List coupons marked `isPublic: true` that are **ACTIVE**, not expired, and still have global usage remaining. No auth required.
+
+### Query parameters (optional)
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `membershipPlanId` | number | Only coupons applicable to this plan |
+| `billingPeriod` | string | `monthly`, `threeMonth`, `sixMonth`, `annual` (or legacy uppercase) |
+
+### Success: `200`
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "code": "ECHASHMA500",
+      "description": "₹500 off membership",
+      "discountType": "FIXED",
+      "discountValue": 500,
+      "expiryDate": "2026-12-31T23:59:59.000Z",
+      "minPurchaseAmount": null,
+      "maxDiscountAmount": null,
+      "applicableMembershipPlans": [2, 3],
+      "applicableBillingPeriods": ["threeMonth", "annual"]
+    }
+  ]
+}
+```
+
+Public responses omit usage counts, company usage, and admin fields.
+
+---
+
+## `GET /coupons/public/:id`
+
+Get one public coupon by id. Returns `404` if the coupon is not public, inactive, expired, or fully used.
+
+**Success:** `200` — same object shape as items in the public list above.
 
 ---
 
