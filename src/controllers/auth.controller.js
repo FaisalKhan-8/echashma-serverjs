@@ -227,7 +227,11 @@ const CreateUser = async (req, res, next) => {
 
     // Handle specific errors
     if (error instanceof AppError) {
-      return res.status(error.statusCode).json({ error: error.message })
+      return res.status(error.statusCode).json({
+        status: 'error',
+        message: error.message,
+        error: error.message
+      })
     }
 
     next(error) // Pass any other errors to the error-handling middleware

@@ -1,6 +1,7 @@
 const path = require('path')
 const { randomUUID } = require('crypto')
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
+const { AppError } = require('../errors/AppError')
 
 const IMAGE_MIME_EXT = {
   'image/png': '.png',
@@ -13,7 +14,7 @@ const IMAGE_MIME_EXT = {
 function getS3Client() {
   const region = process.env.AWS_REGION
   if (!region) {
-    throw new Error('AWS_REGION is not set')
+    throw new AppError('Image upload failed: AWS_REGION is not set', 500)
   }
   return new S3Client({
     region,
@@ -75,7 +76,7 @@ async function uploadPublicObject({
 }) {
   const bucket = process.env.AWS_BUCKET_NAME
   if (!bucket) {
-    throw new Error('AWS_BUCKET_NAME is not set')
+    throw new AppError('Image upload failed: AWS_BUCKET_NAME is not set', 500)
   }
 
   const ext = extensionFromMime(contentType, originalName)
@@ -93,7 +94,12 @@ async function uploadPublicObject({
     input.ACL = 'public-read'
   }
 
-  await client.send(new PutObjectCommand(input))
+  try {
+    await client.send(new PutObjectCommand(input))
+  } catch (error) {
+    const reason = error.message || error.name || 'S3 error'
+    throw new AppError(`Image upload failed: ${reason}`, 502)
+  }
 
   const url = `${getPublicBaseUrl()}/${key}`
   return { key, url }

@@ -9,7 +9,7 @@ const { handleCashfreeWebhook } = require('./controllers/transaction.controller'
 const { startMembershipExpiryCron } = require('./cron/membershipExpiry.cron');
 const fs = require('fs');
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 app.use(cors());
