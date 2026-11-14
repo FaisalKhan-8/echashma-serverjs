@@ -1,3 +1,9 @@
+// Node 25+ removed Buffer.SlowBuffer. jsonwebtoken -> jwa still reads it at load time.
+const nodeBuffer = require('buffer');
+if (!nodeBuffer.SlowBuffer) {
+  nodeBuffer.SlowBuffer = nodeBuffer.Buffer;
+}
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
