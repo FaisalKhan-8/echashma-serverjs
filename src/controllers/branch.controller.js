@@ -485,11 +485,9 @@ async function getBranchById(req, res, next) {
     const { branchId } = req.params; // Extract branchId from the route parameters
     const { role } = req.user; // Get the role from the authenticated user
 
-    console.log(req.user, 'user');
-
-    // Validate branchId
-    if (!branchId || isNaN(branchId)) {
-      throw new AppError('Invalid companyId provided', 400);
+    const parsedBranchId = Number(branchId);
+    if (!Number.isInteger(parsedBranchId)) {
+      throw new AppError('Invalid branch id provided', 400);
     }
 
     // Validate role: Only SUPER_ADMIN, ADMIN, and SUB_ADMIN are allowed
@@ -503,7 +501,7 @@ async function getBranchById(req, res, next) {
 
     // Fetch the branch based on branchId
     const branch = await db.branch.findUnique({
-      where: { id: Number(branchId) },
+      where: { id: parsedBranchId },
       include: {
         users: true,
         company: true,
