@@ -2,6 +2,26 @@ const { AppError } = require('../errors/AppError');
 const db = require('../utils/db.config');
 const jwt = require('jsonwebtoken');
 
+async function productNameById(products) {
+  const ids = [
+    ...new Set(
+      (products || [])
+        .map((product) => Number(product.productId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const rows = await db.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+  return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+function stockProductLabel(names, product) {
+  return names.get(Number(product.productId)) || 'this product';
+}
+
 // const createCustomerInvoice = async (req, res, next) => {
 //   const { companyId, branchId: userBranchId, role } = req.user;
 //   const { branchId: queryBranchId } = req.query;
@@ -330,6 +350,8 @@ const createCustomerInvoice = async (req, res, next) => {
     const orderDateObj = new Date(orderDate);
     if (isNaN(orderDateObj)) throw new AppError('Invalid order date', 400);
 
+    const names = await productNameById(products);
+
     // ✅ Transaction
     const newInvoice = await db.$transaction(async (prisma) => {
       for (const product of products) {
@@ -343,12 +365,11 @@ const createCustomerInvoice = async (req, res, next) => {
 
         let inventory = await prisma.inventory.findFirst({ where });
 
+        const label = stockProductLabel(names, product);
+
         if (!inventory) {
           if (!allowNegative) {
-            throw new AppError(
-              `Inventory not found for product ${product.name}`,
-              400
-            );
+            throw new AppError(`${label} is not in this branch stock`, 400);
           }
           // ✅ create negative inventory
           inventory = await prisma.inventory.create({
@@ -363,7 +384,7 @@ const createCustomerInvoice = async (req, res, next) => {
           // ✅ update inventory (allow negative if flag is true)
           if (!allowNegative && inventory.stock < product.quantity) {
             throw new AppError(
-              `Insufficient stock for product ${product.name} (${inventory.stock} available)`,
+              `Only ${inventory.stock} of ${label} left in stock`,
               400
             );
           }
@@ -572,6 +593,8 @@ const updateCustomerInvoice = async (req, res, next) => {
       const orderDateObj = new Date(orderDate);
       if (isNaN(orderDateObj)) throw new AppError('Invalid order date', 400);
 
+      const names = await productNameById(products);
+
       // ✅ Update inventory with new quantities (UPDATED for negative billing)
       for (const product of products) {
         const where = {
@@ -584,12 +607,11 @@ const updateCustomerInvoice = async (req, res, next) => {
 
         let inventory = await prisma.inventory.findFirst({ where });
 
+        const label = stockProductLabel(names, product);
+
         if (!inventory) {
           if (!allowNegative) {
-            throw new AppError(
-              `Inventory not found for product ${product.name}`,
-              400
-            );
+            throw new AppError(`${label} is not in this branch stock`, 400);
           }
           // ✅ create negative inventory
           inventory = await prisma.inventory.create({
@@ -604,7 +626,7 @@ const updateCustomerInvoice = async (req, res, next) => {
           // ✅ update inventory (allow negative if flag is true)
           if (!allowNegative && inventory.stock < product.quantity) {
             throw new AppError(
-              `Insufficient stock for product ${product.name} (${inventory.stock} available)`,
+              `Only ${inventory.stock} of ${label} left in stock`,
               400
             );
           }
