@@ -789,9 +789,19 @@ async function getAllCustomerInvoices(req, res, next) {
       },
     });
 
-    // Check if invoices exist
+    // An empty branch is a normal result. A 404 makes IIS replace the JSON
+    // body with an HTML error page in production.
     if (invoices.length === 0) {
-      return next(new AppError('No invoices found', 404));
+      return res.status(200).json({
+        status: 'success',
+        data: [],
+        pagination: {
+          totalInvoices: 0,
+          totalPages: 0,
+          currentPage: page,
+          limit,
+        },
+      });
     }
 
     // Calculate total pages

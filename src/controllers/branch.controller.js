@@ -508,8 +508,6 @@ async function getBranchById(req, res, next) {
       },
     });
 
-    console.log(branch, 'branch');
-
     // If no branch is found, return a 404 error
     if (!branch) {
       throw new AppError('Branch not found', 404);

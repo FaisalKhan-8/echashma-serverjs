@@ -858,9 +858,18 @@ exports.getAllPurchases = async (req, res, next) => {
       db.purchase.count({ where: whereClause }),
     ]);
 
-    // Handle no purchases found
+    // An empty list is a valid result. A 404 makes IIS replace the JSON with an HTML page.
     if (purchases.length === 0) {
-      return next(new AppError('No purchases found', 404));
+      return res.status(200).json({
+        status: 'success',
+        data: [],
+        pagination: {
+          total: 0,
+          totalPages: 0,
+          currentPage: pageNumber,
+          limit: pageLimit,
+        },
+      });
     }
 
     // Send response with pagination data
