@@ -390,7 +390,12 @@ const getInventoryProducts = async (req, res, next) => {
 
     const productIds = inventoryProducts.map((inv) => inv.productId);
     if (productIds.length === 0) {
-      throw new AppError('No products found in inventory', 404);
+      return res.status(200).json({
+        data: [],
+        total: 0,
+        page: currentPage,
+        limit,
+      });
     }
 
     // Build a filter for the Product table based on search if provided
@@ -411,7 +416,12 @@ const getInventoryProducts = async (req, res, next) => {
     });
 
     if (products.length === 0) {
-      throw new AppError('No products found matching the criteria', 404);
+      return res.status(200).json({
+        data: [],
+        total: 0,
+        page: currentPage,
+        limit,
+      });
     }
 
     res.json({
